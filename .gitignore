@@ -1,0 +1,47 @@
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+dist/
+bin/
+
+# 数据与密钥
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.gpg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 构建产物
+mymail-vue/dist/
+mymail-go/dist/
+
+# 备份
+backups/
+
+# Trae 临时文件
+.trae/
