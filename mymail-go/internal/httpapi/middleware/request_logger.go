@@ -3,9 +3,11 @@ package middleware
 
 import (
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/mymail/mymail-go/internal/metrics"
 )
 
 // RequestLogger 记录每个 HTTP 请求的访问日志。
@@ -52,8 +54,19 @@ func RequestLogger() gin.HandlerFunc {
 // 指标定义见 internal/metrics 包。
 func Metrics() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 指标埋点在 internal/metrics 中实现
-		// 这里仅做转发，保持中间件链顺序
+		path := c.FullPath()
+		if path == "" {
+			path = "unknown"
+		}
+		metrics.HTTPRequestsInFlight.Inc()
+		defer metrics.HTTPRequestsInFlight.Dec()
+
+		start := time.Now()
 		c.Next()
+
+		latency := time.Since(start).Seconds()
+		status := strconv.Itoa(c.Writer.Status())
+		metrics.HTTPRequestsTotal.WithLabelValues(c.Request.Method, path, status).Inc()
+		metrics.HTTPRequestDuration.WithLabelValues(c.Request.Method, path).Observe(latency)
 	}
 }
