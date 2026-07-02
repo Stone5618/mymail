@@ -29,6 +29,11 @@ func NewHealthHandler(database *db.DB) *HealthHandler {
 	return h
 }
 
+// SetStarted 手动设置启动状态（主要用于测试）。
+func (h *HealthHandler) SetStarted(v bool) {
+	h.started.Store(v)
+}
+
 // Liveness 存活探针：进程是否存活。
 // 用于 Kubernetes livenessProbe，失败则重启容器。
 // GET /healthz

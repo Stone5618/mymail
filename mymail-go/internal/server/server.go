@@ -7,10 +7,15 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"time"
 
+	"github.com/mymail/mymail-go/internal/audit"
 	"github.com/mymail/mymail-go/internal/config"
+	"github.com/mymail/mymail-go/internal/crypto"
 	"github.com/mymail/mymail-go/internal/httpapi"
+	"github.com/mymail/mymail-go/internal/service"
+	"github.com/mymail/mymail-go/internal/storage/dao"
 	"github.com/mymail/mymail-go/internal/storage/db"
 	"github.com/mymail/mymail-go/internal/tracing"
 )
@@ -21,6 +26,7 @@ type Server struct {
 	db      *db.DB
 	httpSrv *http.Server
 	tracer  *tracing.Tracer
+	audit   *audit.Logger
 }
 
 // New 构建服务器实例，初始化 DB、迁移、追踪、路由。
@@ -46,10 +52,38 @@ func New(ctx context.Context, cfg *config.Config) (*Server, error) {
 		}
 	}
 
-	// 3. 构建 HTTP 路由
-	router := httpapi.NewRouter(cfg, database)
+	// 3. 初始化 DAO 层
+	userDAO := dao.NewUserDAO(database)
 
-	// 4. 构建 HTTP Server
+	// 4. 初始化 JWT 管理器（P0-8：强制校验已在 config.Validate 完成）
+	jwtMgr, err := crypto.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiresIn, cfg.JWTRememberExpiresIn)
+	if err != nil {
+		return nil, fmt.Errorf("初始化 JWT 管理器失败: %w", err)
+	}
+
+	// 5. 初始化审计日志器（双写 DB + JSONL）
+	jsonlPath := ""
+	if cfg.AuditEnabled {
+		jsonlPath = filepath.Join(filepath.Dir(cfg.DBPath), "audit.log")
+	}
+	auditLogger, err := audit.NewLogger(database, cfg.AuditEnabled, jsonlPath)
+	if err != nil {
+		return nil, fmt.Errorf("初始化审计日志器失败: %w", err)
+	}
+
+	// 6. 初始化 Service 层
+	authSvc := service.NewAuthService(userDAO, jwtMgr, auditLogger, cfg.Domain, cfg.MaildirPath)
+
+	// 7. 构建 HTTP 路由
+	router := httpapi.NewRouter(httpapi.Deps{
+		Cfg:         cfg,
+		DB:          database,
+		UserDAO:     userDAO,
+		JWTManager:  jwtMgr,
+		AuthService: authSvc,
+	})
+
+	// 8. 构建 HTTP Server
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	httpSrv := &http.Server{
 		Addr:              addr,
@@ -66,6 +100,7 @@ func New(ctx context.Context, cfg *config.Config) (*Server, error) {
 		db:      database,
 		httpSrv: httpSrv,
 		tracer:  tr,
+		audit:   auditLogger,
 	}, nil
 }
 
@@ -92,7 +127,14 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}
 	}
 
-	// 3. 关闭数据库
+	// 3. 关闭审计日志器（刷盘 JSONL）
+	if s.audit != nil {
+		if err := s.audit.Close(); err != nil {
+			slog.Error("审计日志关闭失败", "error", err)
+		}
+	}
+
+	// 4. 关闭数据库
 	if s.db != nil {
 		if err := s.db.Close(); err != nil {
 			slog.Error("数据库关闭失败", "error", err)
