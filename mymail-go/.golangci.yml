@@ -1,0 +1,78 @@
+# golangci-lint 配置
+# 文档：https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  tests: true
+  go: "1.22"
+
+linters:
+  enable:
+    - errcheck        # 检查未处理的错误
+    - gosimple        # 简化代码
+    - govet           # go vet 检查
+    - ineffassign     # 检查无效赋值
+    - staticcheck     # 静态检查
+    - typecheck       # 类型检查
+    - unused          # 未使用代码
+    - gosec           # 安全检查
+    - gocritic        # 代码改进建议
+    - revive          # 替代 golint
+    - misspell        # 拼写检查
+    - gofmt           # 格式化检查
+    - goimports       # import 顺序
+  disable:
+    - lll             # 不限制行长
+    - funlen          # 不限制函数长度
+    - gocyclo         # 不限制圈复杂度（用 gocritic 替代）
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  gosec:
+    excludes:
+      - G104  # 未检查错误（errcheck 已覆盖）
+    severity: medium
+    confidence: medium
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+      - style
+    disabled-checks:
+      - hugeParam  # 不强制指针传递大结构体
+
+  revive:
+    severity: warning
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-naming
+      - name: error-strings
+      - name: exported
+        arguments: ["disableStutteringCheck"]
+
+issues:
+  exclude-rules:
+    # 测试代码允许使用 fmt.Print
+    - path: _test\.go
+      linters:
+        - gosec
+        - errcheck
+    # main 包允许使用 log.Fatal
+    - path: cmd/
+      linters:
+        - gocritic
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  fix: false
+
+output:
+  formats:
+    - format: colored-line-number
+  sort-results: true
