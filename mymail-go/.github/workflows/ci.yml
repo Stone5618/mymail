@@ -1,0 +1,256 @@
+# MyMail Go 后端 CI 流水线
+#
+# 8 阶段门禁：lint / vet / test / build / frontend / docker / security-scan / coverage-check
+# 所有阶段必须通过才能合并（ci-gate 作为分支保护必需状态检查）。
+#
+# 仓库布局假设：monorepo，检出根目录同时包含 mymail-go/ 与 mymail-vue/。
+# Go 操作在 mymail-go/ 下执行，前端操作在 mymail-vue/ 下执行，
+# Docker 构建上下文为仓库根目录（与 Dockerfile / Makefile 约定一致）。
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+# 同一分支/PR 的新运行取消旧运行，节省 CI 资源
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小权限原则
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.25'
+  NODE_VERSION: '22'
+
+jobs:
+  # ===== 阶段 1: 代码静态检查（golangci-lint） =====
+  lint:
+    name: 1. Lint (golangci-lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mymail-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: mymail-go/go.sum
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: mymail-go
+          args: --timeout=5m
+
+  # ===== 阶段 2: go vet =====
+  vet:
+    name: 2. Vet (go vet)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mymail-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: mymail-go/go.sum
+      - name: go vet ./...
+        run: go vet ./...
+
+  # ===== 阶段 3: 单元测试（含竞态检测与覆盖率） =====
+  test:
+    name: 3. Test (go test -race -cover)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mymail-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: mymail-go/go.sum
+      - name: 运行单元测试
+        run: |
+          go test ./... -race -cover -timeout=180s -coverprofile=coverage.out -covermode=atomic
+          echo "===== 覆盖率摘要 ====="
+          go tool cover -func=coverage.out | grep '^total:' || true
+      - name: 上传覆盖率报告（供 coverage-check 阶段使用）
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: mymail-go/coverage.out
+          retention-days: 7
+      - name: 上传覆盖率到 Codecov（可选，未配置 token 时跳过）
+        if: ${{ vars.CODECOV_ENABLED == 'true' }}
+        uses: codecov/codecov-action@v4
+        with:
+          files: mymail-go/coverage.out
+          flags: go
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # ===== 阶段 4: 构建 Go 二进制 =====
+  build:
+    name: 4. Build (go build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mymail-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: mymail-go/go.sum
+      - name: 构建二进制
+        run: |
+          CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/mymail ./cmd/mymail
+          ls -lh dist/mymail
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary
+          path: mymail-go/dist/mymail
+          retention-days: 7
+
+  # ===== 阶段 5: 前端构建 =====
+  # 前端源码位于 mymail-vue/，构建命令 npm ci + npm run build
+  frontend:
+    name: 5. Frontend (npm build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mymail-vue
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mymail-vue/package-lock.json
+      - name: 安装依赖（npm ci）
+        run: npm ci --no-audit --no-fund
+      - name: 构建前端（npm run build）
+        run: npm run build
+      - name: 上传前端构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: mymail-vue/dist
+          retention-days: 7
+
+  # ===== 阶段 6: Docker 镜像构建（验证 Dockerfile 可用） =====
+  docker:
+    name: 6. Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 构建 Docker 镜像（3 阶段：前端 → 后端 → 运行时）
+        run: |
+          docker build \
+            -t mymail:ci \
+            -f mymail-go/deployments/docker/Dockerfile .
+      - name: 校验镜像与 HEALTHCHECK
+        run: |
+          docker images mymail:ci
+          docker inspect mymail:ci --format='{{.Config.Healthcheck.Test}}' || true
+
+  # ===== 阶段 7: 安全扫描（gosec + govulncheck） =====
+  security-scan:
+    name: 7. Security Scan (gosec + govulncheck)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mymail-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: mymail-go/go.sum
+      - name: 安装安全工具
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: gosec 安全扫描
+        run: gosec -severity medium -confidence medium ./...
+      - name: govulncheck 漏洞检查
+        run: govulncheck ./...
+
+  # ===== 阶段 8: 覆盖率检查（阈值 ≥ 80%） =====
+  coverage-check:
+    name: 8. Coverage Check (≥ 80%)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: 下载覆盖率报告
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: mymail-go
+      - name: 检查覆盖率是否达标（阈值 80%）
+        run: |
+          COVERAGE=$(go tool cover -func=mymail-go/coverage.out | grep '^total:' | awk '{print $3}' | sed 's/%//')
+          echo "代码总覆盖率: ${COVERAGE}%"
+          awk -v cov="$COVERAGE" 'BEGIN {
+            if (cov + 0 >= 80) {
+              print "✅ 覆盖率达标 (" cov "% >= 80%)"
+              exit 0
+            } else {
+              print "❌ 覆盖率不达标 (" cov "% < 80%)"
+              exit 1
+            }
+          }'
+
+  # ===== CI 门禁：8 个阶段全部通过才允许合并 =====
+  # 将此 job 配置为 GitHub 分支保护的必需状态检查。
+  ci-gate:
+    name: CI Gate (All Stages Passed)
+    runs-on: ubuntu-latest
+    needs: [lint, vet, test, build, frontend, docker, security-scan, coverage-check]
+    if: always()
+    steps:
+      - name: 汇总各阶段结果
+        run: |
+          declare -A stages=(
+            [lint]="${{ needs.lint.result }}"
+            [vet]="${{ needs.vet.result }}"
+            [test]="${{ needs.test.result }}"
+            [build]="${{ needs.build.result }}"
+            [frontend]="${{ needs.frontend.result }}"
+            [docker]="${{ needs.docker.result }}"
+            [security-scan]="${{ needs.security-scan.result }}"
+            [coverage-check]="${{ needs.coverage-check.result }}"
+          )
+          failed=0
+          echo "===== CI 各阶段结果 ====="
+          for stage in lint vet test build frontend docker security-scan coverage-check; do
+            result="${stages[$stage]}"
+            echo "  ${stage}: ${result}"
+            if [[ "$result" != "success" ]]; then
+              failed=1
+            fi
+          done
+          echo "=========================="
+          if [[ $failed -eq 1 ]]; then
+            echo "❌ CI 门禁未通过，存在失败或被取消的阶段，禁止合并"
+            exit 1
+          fi
+          echo "✅ 全部 8 个 CI 阶段已通过，允许合并"

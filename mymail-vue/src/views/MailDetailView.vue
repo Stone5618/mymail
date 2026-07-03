@@ -64,7 +64,7 @@
 
         <!-- Body -->
         <div class="border-t border-dark-700 pt-6 mb-6">
-          <div class="prose prose-invert max-w-none text-dark-200 leading-relaxed" v-html="mail.body_html || escapeHtml(mail.body_text)"></div>
+          <div class="prose prose-invert max-w-none text-dark-200 leading-relaxed" v-html="sanitize(mail.body_html || escapeHtml(mail.body_text))"></div>
         </div>
 
         <!-- Attachments -->
@@ -104,6 +104,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import DOMPurify from 'dompurify'
 import { getMail, deleteMail, toggleStar } from '@/api'
 import { useFormat } from '@/composables/useFormat'
 import { useToast } from '@/composables/useToast'
@@ -112,6 +113,12 @@ const props = defineProps({ id: { type: [String, Number], required: true } })
 const router = useRouter()
 const { formatDate, escapeHtml } = useFormat()
 const { toast } = useToast()
+
+// P0-4：HTML 净化，防止 XSS（script/iframe/event handler 等被移除）
+function sanitize(html) {
+  if (!html) return ''
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+}
 
 const mail = ref(null)
 const attachments = ref([])

@@ -45,24 +45,54 @@ type Config struct {
 	AdminEmail    string `mapstructure:"ADMIN_EMAIL"`
 
 	// SMTP
-	SMTPPort                int    `mapstructure:"SMTP_PORT"`
-	SMTPSendHost            string `mapstructure:"SMTP_SEND_HOST"`
-	SMTPSendPort            int    `mapstructure:"SMTP_SEND_PORT"`
-	SMTPTLSRejectUnauthorized bool `mapstructure:"SMTP_TLS_REJECT_UNAUTHORIZED"`
-	SMTPTLSCert             string `mapstructure:"SMTP_TLS_CERT"`
-	SMTPTLSKey              string `mapstructure:"SMTP_TLS_KEY"`
+	SMTPPort                  int    `mapstructure:"SMTP_PORT"`
+	SMTPSendHost              string `mapstructure:"SMTP_SEND_HOST"`
+	SMTPSendPort              int    `mapstructure:"SMTP_SEND_PORT"`
+	SMTPSendUsername          string `mapstructure:"SMTP_SEND_USERNAME"`
+	SMTPSendPassword          string `mapstructure:"SMTP_SEND_PASSWORD"`
+	SMTPTLSRejectUnauthorized bool   `mapstructure:"SMTP_TLS_REJECT_UNAUTHORIZED"`
+	SMTPTLSCert               string `mapstructure:"SMTP_TLS_CERT"`
+	SMTPTLSKey                string `mapstructure:"SMTP_TLS_KEY"`
+	// SMTP 连接限流（P1：连接级防护）
+	SMTPMaxConnectionsPerIp int `mapstructure:"SMTP_MAX_CONNECTIONS_PER_IP"`
+	SMTPRateWindowMs        int `mapstructure:"SMTP_RATE_WINDOW_MS"`
 
 	// 灰名单
 	GreylistDelayMs int `mapstructure:"GREYLIST_DELAY_MS"`
 	GreylistTtlMs   int `mapstructure:"GREYLIST_TTL_MS"`
 
 	// 限流
-	RateLimitMax int `mapstructure:"RATE_LIMIT_MAX"`
-	SendRateLimitPerMin int `mapstructure:"SEND_RATE_LIMIT_PER_MIN"`
+	RateLimitMax         int `mapstructure:"RATE_LIMIT_MAX"`
+	SendRateLimitPerMin  int `mapstructure:"SEND_RATE_LIMIT_PER_MIN"`
 
-	// 反垃圾
-	SpamThreshold          int `mapstructure:"SPAM_THRESHOLD"`
-	SpamSuspiciousThreshold int `mapstructure:"SPAM_SUSPICIOUS_THRESHOLD"`
+	// 反垃圾（阶段 4 扩展）
+	SpamThreshold           int      `mapstructure:"SPAM_THRESHOLD"`
+	SpamSuspiciousThreshold int      `mapstructure:"SPAM_SUSPICIOUS_THRESHOLD"`
+	SpfEnabled              bool     `mapstructure:"SPF_ENABLED"`       // SPF 校验开关
+	SpfMaxDepth             int      `mapstructure:"SPF_MAX_DEPTH"`     // SPF include 递归深度
+	DnsblEnabled            bool     `mapstructure:"DNSBL_ENABLED"`     // DNSBL 校验开关
+	DnsblZones              []string `mapstructure:"DNSBL_ZONES"`       // DNSBL zone 列表
+	DnsblQueryTimeoutMs     int      `mapstructure:"DNSBL_QUERY_TIMEOUT_MS"` // 单次 DNSBL 查询超时
+	SpfQueryTimeoutMs       int      `mapstructure:"SPF_QUERY_TIMEOUT_MS"`   // 单次 SPF 查询超时
+
+	// 出站 SMTP 熔断器（gobreaker）
+	SMTPCircuitBreakerEnabled      bool    `mapstructure:"SMTP_CIRCUIT_BREAKER_ENABLED"`
+	SMTPCircuitBreakerMaxRequests  uint32  `mapstructure:"SMTP_CIRCUIT_BREAKER_MAX_REQUESTS"`  // 半开状态最大请求数
+	SMTPCircuitBreakerIntervalMs   int     `mapstructure:"SMTP_CIRCUIT_BREAKER_INTERVAL_MS"`   // closed 状态计数窗口
+	SMTPCircuitBreakerTimeoutMs    int     `mapstructure:"SMTP_CIRCUIT_BREAKER_TIMEOUT_MS"`    // open 状态持续时间
+	SMTPCircuitBreakerFailureRatio float64 `mapstructure:"SMTP_CIRCUIT_BREAKER_FAILURE_RATIO"` // 失败率阈值
+	SMTPCircuitBreakerMinRequests  uint32  `mapstructure:"SMTP_CIRCUIT_BREAKER_MIN_REQUESTS"` // 触发熔断最小请求数
+
+	// 出站 SMTP 重试（backoff）
+	SMTPRetryEnabled          bool `mapstructure:"SMTP_RETRY_ENABLED"`
+	SMTPRetryMaxAttempts      int  `mapstructure:"SMTP_RETRY_MAX_ATTEMPTS"`
+	SMTPRetryInitialIntervalMs int `mapstructure:"SMTP_RETRY_INITIAL_INTERVAL_MS"`
+	SMTPRetryMaxIntervalMs    int  `mapstructure:"SMTP_RETRY_MAX_INTERVAL_MS"`
+	SMTPRetryMaxElapsedTimeMs int  `mapstructure:"SMTP_RETRY_MAX_ELAPSED_TIME_MS"`
+
+	// 规则引擎（P1-7：ReDoS 防护）
+	RulesMaxPatternLength int `mapstructure:"RULES_MAX_PATTERN_LENGTH"` // 正则 pattern 最大长度
+	RulesCompileTimeoutMs int `mapstructure:"RULES_COMPILE_TIMEOUT_MS"` // 正则编译超时（毫秒）
 
 	// CORS（P1-2：白名单）
 	CORSAllowedOrigins []string `mapstructure:"CORS_ALLOWED_ORIGINS"`
@@ -141,6 +171,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("SMTP_PORT", 25)
 	v.SetDefault("SMTP_SEND_PORT", 587)
 	v.SetDefault("SMTP_TLS_REJECT_UNAUTHORIZED", true)
+	v.SetDefault("SMTP_MAX_CONNECTIONS_PER_IP", 10)
+	v.SetDefault("SMTP_RATE_WINDOW_MS", 60000) // 1 分钟窗口
 
 	// 灰名单
 	v.SetDefault("GREYLIST_DELAY_MS", 300000)   // 5 分钟
@@ -150,9 +182,38 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("RATE_LIMIT_MAX", 100)
 	v.SetDefault("SEND_RATE_LIMIT_PER_MIN", 10)
 
-	// 反垃圾
+	// 反垃圾（阶段 4 扩展）
 	v.SetDefault("SPAM_THRESHOLD", 10)
 	v.SetDefault("SPAM_SUSPICIOUS_THRESHOLD", 5)
+	v.SetDefault("SPF_ENABLED", true)
+	v.SetDefault("SPF_MAX_DEPTH", 10) // RFC 7208 建议 include 递归上限 10
+	v.SetDefault("DNSBL_ENABLED", true)
+	v.SetDefault("DNSBL_ZONES", []string{
+		"zen.spamhaus.org",
+		"bl.spamcop.net",
+		"b.barracudacentral.org",
+	})
+	v.SetDefault("DNSBL_QUERY_TIMEOUT_MS", 3000)
+	v.SetDefault("SPF_QUERY_TIMEOUT_MS", 3000)
+
+	// 出站 SMTP 熔断器
+	v.SetDefault("SMTP_CIRCUIT_BREAKER_ENABLED", true)
+	v.SetDefault("SMTP_CIRCUIT_BREAKER_MAX_REQUESTS", uint32(5))   // 半开状态最多 5 个请求
+	v.SetDefault("SMTP_CIRCUIT_BREAKER_INTERVAL_MS", 60000)        // closed 状态 60 秒计数窗口
+	v.SetDefault("SMTP_CIRCUIT_BREAKER_TIMEOUT_MS", 30000)         // open 状态 30 秒后半开
+	v.SetDefault("SMTP_CIRCUIT_BREAKER_FAILURE_RATIO", 0.6)        // 失败率 > 60% 触发熔断
+	v.SetDefault("SMTP_CIRCUIT_BREAKER_MIN_REQUESTS", uint32(10))  // 至少 10 个请求才计算
+
+	// 出站 SMTP 重试
+	v.SetDefault("SMTP_RETRY_ENABLED", true)
+	v.SetDefault("SMTP_RETRY_MAX_ATTEMPTS", 3)
+	v.SetDefault("SMTP_RETRY_INITIAL_INTERVAL_MS", 500)
+	v.SetDefault("SMTP_RETRY_MAX_INTERVAL_MS", 10000)
+	v.SetDefault("SMTP_RETRY_MAX_ELAPSED_TIME_MS", 60000)
+
+	// 规则引擎（P1-7：ReDoS 防护）
+	v.SetDefault("RULES_MAX_PATTERN_LENGTH", 500)    // 正则 pattern 最多 500 字符
+	v.SetDefault("RULES_COMPILE_TIMEOUT_MS", 2000)   // 编译超时 2 秒
 
 	// 可观测性
 	v.SetDefault("LOG_LEVEL", "info")

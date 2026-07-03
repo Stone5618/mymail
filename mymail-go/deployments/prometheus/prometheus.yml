@@ -1,0 +1,58 @@
+# MyMail Prometheus 监控配置
+#
+# 抓取目标：
+#   - mymail-app：Go 后端（容器名 mymail-app，HTTP 端口 8080，指标路径 /metrics）
+#   - prometheus-self：Prometheus 自身指标
+#
+# 启动：docker run -d -p 9090:9090 -v $(pwd)/deployments/prometheus:/etc/prometheus prom/prometheus
+#
+# 告警规则文件：alerts.yml
+# 告警推送目标：Alertmanager（默认端口 9093）
+
+global:
+  # 抓取间隔（全局默认）
+  scrape_interval: 15s
+  # 求值间隔（规则评估）
+  evaluation_interval: 15s
+  # 外部标签（用于多实例联邦 / 区分集群）
+  external_labels:
+    cluster: mymail
+    env: prod
+
+# 告警规则文件
+rule_files:
+  - alerts.yml
+
+# 告警推送配置（Alertmanager）
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# 抓取配置
+scrape_configs:
+  # MyMail Go 后端
+  - job_name: mymail-app
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - mymail-app:8080
+        labels:
+          service: mymail
+          component: backend
+
+  # Prometheus 自身指标（用于监控监控组件健康度）
+  - job_name: prometheus-self
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - localhost:9090
+        labels:
+          service: prometheus
+          component: monitoring

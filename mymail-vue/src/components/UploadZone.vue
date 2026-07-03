@@ -55,7 +55,9 @@
           <div class="text-sm text-dark-200 truncate" :title="f.name">{{ f.name }}</div>
           <div class="flex items-center gap-2 text-xs text-dark-400 mt-0.5">
             <span>{{ formatSize(f.size) }}</span>
-            <span class="text-green-400">✓</span>
+            <span v-if="f.status === 'uploading'" class="text-amber-400 animate-pulse">⏳ 上传中...</span>
+            <span v-else-if="f.status === 'done'" class="text-green-400">✓</span>
+            <span v-else-if="f.status === 'error'" class="text-red-400">✗ {{ f.error || '失败' }}</span>
           </div>
         </div>
 
@@ -87,6 +89,8 @@ const emit = defineEmits(['update:attachments'])
 const isDragging = ref(false)
 const files = ref([])
 const dropZone = ref(null)
+// P0-7：上传中计数器，正确管理 isUploading 状态
+const uploadingCount = ref(0)
 
 function getAttachmentIds() {
   return files.value
@@ -98,8 +102,9 @@ function getFiles() {
   return files.value.map(f => f._file)
 }
 
+// P0-7：返回真实上传状态（修复原始终返回 false 的 bug）
 function isUploading() {
-  return false
+  return uploadingCount.value > 0
 }
 
 defineExpose({ getAttachmentIds, getFiles, isUploading })
@@ -159,26 +164,33 @@ async function handleFiles(newFiles) {
       item.previewUrl = URL.createObjectURL(file)
     }
     files.value.push(item)
+    // P0-7：并行上传，但用 uploadingCount 跟踪
     uploadOne(item)
   }
 }
 
+// P0-7：正确管理 uploading 状态（uploading → done/error），用 uploadingCount 跟踪
 async function uploadOne(item) {
-  // Fire-and-forget: Cloudflare proxy prevents response from reaching browser
-  item.status = 'done'
-  item.progress = 100
-  emitUpdate()
-  // Upload in background, don't await
-  const fd = new FormData()
-  fd.append('files', item._file)
-  uploadFiles(fd).then(res => {
+  uploadingCount.value++
+  try {
+    const fd = new FormData()
+    fd.append('files', item._file)
+    const res = await uploadFiles(fd)
     if (res.files && res.files.length) {
       item.attId = res.files[0].id
       if (isImage(item.mimeType)) {
         item.previewUrl = getUploadPreviewUrl(res.files[0].id)
       }
     }
-  }).catch(() => {})
+    item.status = 'done'
+    item.progress = 100
+  } catch (e) {
+    item.status = 'error'
+    item.error = e.message || '上传失败'
+  } finally {
+    uploadingCount.value--
+    emitUpdate()
+  }
 }
 
 async function removeFile(file) {

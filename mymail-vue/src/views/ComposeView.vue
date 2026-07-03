@@ -95,6 +95,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import DOMPurify from 'dompurify'
 import { useAuthStore } from '@/stores/auth'
 import { sendMail, saveDraft, getMail, deleteMail } from '@/api'
 import { useToast } from '@/composables/useToast'
@@ -104,6 +105,12 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const { toast } = useToast()
+
+// P0-4：HTML 净化，防止回复/转发时 XSS（原邮件 body_html 可能含恶意脚本）
+function sanitize(html) {
+  if (!html) return ''
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+}
 
 const toRecipients = ref([])
 const toInputValue = ref('')
@@ -244,11 +251,11 @@ async function loadReplyOrForward() {
       toRecipients.value = [msg.from_addr]
       subject.value = 'Re: ' + (msg.subject || '')
       const date = msg.received_at ? new Date(msg.received_at).toLocaleString('zh-CN') : ''
-      await setBodyHtml(`<br><br><p>---------- 回复内容 ----------</p><p>发件人: ${msg.from_name || msg.from_addr} &lt;${msg.from_addr}&gt;</p><p>日期: ${date}</p><p>主题: ${msg.subject || ''}</p><br>${msg.body_html || msg.body_text || ''}`)
+      await setBodyHtml(`<br><br><p>---------- 回复内容 ----------</p><p>发件人: ${msg.from_name || msg.from_addr} &lt;${msg.from_addr}&gt;</p><p>日期: ${date}</p><p>主题: ${msg.subject || ''}</p><br>${sanitize(msg.body_html || msg.body_text || '')}`)
     } else {
       subject.value = 'Fwd: ' + (msg.subject || '')
       const date = msg.received_at ? new Date(msg.received_at).toLocaleString('zh-CN') : ''
-      await setBodyHtml(`<br><br><p>---------- 转发邮件 ----------</p><p>发件人: ${msg.from_name || msg.from_addr} &lt;${msg.from_addr}&gt;</p><p>日期: ${date}</p><p>收件人: ${msg.to_addr}</p><p>主题: ${msg.subject || ''}</p><br>${msg.body_html || msg.body_text || ''}`)
+      await setBodyHtml(`<br><br><p>---------- 转发邮件 ----------</p><p>发件人: ${msg.from_name || msg.from_addr} &lt;${msg.from_addr}&gt;</p><p>日期: ${date}</p><p>收件人: ${msg.to_addr}</p><p>主题: ${msg.subject || ''}</p><br>${sanitize(msg.body_html || msg.body_text || '')}`)
     }
   } catch {}
 }

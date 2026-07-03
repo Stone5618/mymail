@@ -130,7 +130,8 @@ func (s *AuthService) Register(ctx context.Context, username, password, displayN
 	}
 
 	// 6. email 生成与唯一校验
-	email := fmt.Sprintf("%s@%s", username, s.domain)
+	// 邮箱标准化为小写（与 Login 的 SanitizeEmail 保持一致，避免大小写差异导致登录失败）
+	email := SanitizeEmail(fmt.Sprintf("%s@%s", username, s.domain))
 	existing, err = s.userDAO.FindByEmail(ctx, email)
 	if err != nil {
 		return nil, fmt.Errorf("查询邮箱失败: %w", err)

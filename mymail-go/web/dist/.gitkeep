@@ -1,0 +1,2 @@
+# 占位文件：确保 //go:embed all:dist 在开发环境下编译通过
+# 生产构建时（Dockerfile Stage 1）将 Vue 构建产物覆盖到此目录

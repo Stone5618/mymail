@@ -1,0 +1,120 @@
+# MyMail Prometheus 告警规则
+#
+# 告警分级：
+#   - critical（严重）：服务不可用、数据丢失风险，需立即处理
+#   - warning（警告）：性能下降、容量预警，需关注但非紧急
+#
+# 严重级别通过 severity 标签标识，由 Alertmanager 路由到不同接收者。
+# 通知文案使用中文描述，便于运维人员快速定位问题。
+
+groups:
+  # ===== 服务可用性告警 =====
+  - name: mymail-availability
+    interval: 30s
+    rules:
+      # 服务宕机：抓取失败持续 1 分钟即触发
+      - alert: MymailAppDown
+        expr: up{job="mymail-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: mymail
+        annotations:
+          summary: "MyMail 后端服务不可用"
+          description: "目标 {{ $labels.instance }} 持续 1 分钟抓取失败，服务可能已宕机。请立即检查容器状态与日志。"
+
+  # ===== HTTP 服务质量告警 =====
+  - name: mymail-http
+    interval: 30s
+    rules:
+      # 高错误率：5xx 占比超过 5% 持续 5 分钟
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(mymail_http_requests_total{status=~"5.."}[5m])) by (job)
+            / sum(rate(mymail_http_requests_total[5m])) by (job)
+            > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: mymail
+        annotations:
+          summary: "HTTP 5xx 错误率过高"
+          description: "当前 5xx 错误率 {{ $value | humanizePercentage }}（阈值 5%），持续 5 分钟。请检查应用日志与依赖组件。"
+
+      # 高延迟：P99 延迟超过 1 秒
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(mymail_http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: mymail
+        annotations:
+          summary: "HTTP P99 延迟过高"
+          description: "当前 P99 延迟 {{ $value | humanizeDuration }}（阈值 1s）。请关注慢查询、数据库连接池与下游依赖。"
+
+  # ===== SMTP 邮件处理告警 =====
+  - name: mymail-smtp
+    interval: 30s
+    rules:
+      # 垃圾邮件激增：10 分钟内被拒垃圾邮件速率超过 100 次/秒
+      - alert: SMTPSpamRejected
+        expr: rate(mymail_smtp_spam_rejected_total[10m]) > 100
+        labels:
+          severity: warning
+          service: mymail
+        annotations:
+          summary: "SMTP 垃圾邮件拒绝量激增"
+          description: "10 分钟内垃圾邮件拒绝速率 {{ $value | humanize }}/s（阈值 100/s）。请关注是否遭遇垃圾邮件攻击或规则误判。"
+
+  # ===== 队列与连接告警 =====
+  - name: mymail-queue
+    interval: 30s
+    rules:
+      # 队列积压：待发送邮件超过 100 封持续 10 分钟
+      - alert: QueueBacklog
+        expr: mymail_queue_pending > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: mymail
+        annotations:
+          summary: "邮件发送队列积压"
+          description: "当前待发送邮件 {{ $value | humanize }} 封（阈值 100），持续 10 分钟。请检查发送器与外部 SMTP 中继。"
+
+      # WebSocket 连接骤降：5 分钟内活跃连接数下降超过 50
+      - alert: WSConnectionsDropped
+        expr: delta(mymail_ws_connections_active[5m]) < -50
+        labels:
+          severity: warning
+          service: mymail
+        annotations:
+          summary: "WebSocket 活跃连接骤降"
+          description: "5 分钟内活跃 WebSocket 连接减少 {{ $value }} 个（阈值 -50）。请检查网络稳定性与 WebSocket 服务状态。"
+
+      # 数据库连接数偏高：活跃连接超过 20 持续 5 分钟
+      - alert: DBConnectionsHigh
+        expr: mymail_db_connections_active > 20
+        for: 5m
+        labels:
+          severity: warning
+          service: mymail
+        annotations:
+          summary: "数据库活跃连接数偏高"
+          description: "当前活跃数据库连接 {{ $value }} 个（阈值 20），持续 5 分钟。可能存在连接泄漏或慢查询。"
+
+  # ===== 存储容量告警 =====
+  - name: mymail-storage
+    interval: 30s
+    rules:
+      # 存储用量过高：单用户存储超过 90MB（0.9 * 100MB）
+      - alert: StorageHigh
+        expr: mymail_storage_used_bytes > 0.9 * 104857600
+        labels:
+          severity: warning
+          service: mymail
+        annotations:
+          summary: "用户存储用量过高"
+          description: "用户 {{ $labels.user_id }} 存储用量 {{ $value | humanize1024 }}（阈值 90MB）。请关注磁盘容量与配额策略。"

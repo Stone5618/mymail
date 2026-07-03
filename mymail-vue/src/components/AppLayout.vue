@@ -54,7 +54,12 @@
             <div class="text-sm text-dark-200 truncate">{{ auth.user?.displayName }}</div>
             <div class="text-xs text-dark-500 truncate">{{ auth.user?.email }}</div>
           </div>
-          <button @click="handleLogout" class="opacity-0 group-hover:opacity-100 text-dark-500 hover:text-red-400 transition-all" title="退出">
+          <button
+            @click="handleLogout"
+            class="text-dark-400 hover:text-red-400 transition-colors p-1.5 rounded-md hover:bg-dark-700"
+            aria-label="退出登录"
+            title="退出"
+          >
             ↩
           </button>
         </div>

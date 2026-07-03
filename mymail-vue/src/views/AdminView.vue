@@ -103,6 +103,27 @@
 
       </div>
     </div>
+
+    <!-- P1-16：重置密码弹窗（替代原明文 toast） -->
+    <div v-if="resetPwModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="resetPwModal = null">
+      <div class="bg-dark-800 border border-dark-700 rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-dark-100">🔑 新密码</h3>
+          <button @click="resetPwModal = null" class="text-dark-500 hover:text-dark-300">✕</button>
+        </div>
+        <p class="text-sm text-dark-400">已为该用户重置密码，请复制后安全地告知用户。此密码仅显示一次。</p>
+        <div class="flex items-center gap-2 bg-dark-900 border border-dark-700 rounded-lg px-3 py-2.5">
+          <code class="flex-1 font-mono text-sm text-primary-300 break-all">{{ resetPwModal.password }}</code>
+          <button
+            @click="copyPassword"
+            class="shrink-0 px-3 py-1.5 rounded-md bg-primary-600 hover:bg-primary-500 text-white text-xs font-medium transition-colors"
+          >📋 复制</button>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button @click="resetPwModal = null" class="btn-secondary text-sm">关闭</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -118,6 +139,8 @@ const { toast } = useToast()
 const users = ref([])
 const stats = ref({})
 const dns = ref([])
+// P1-16：重置密码弹窗状态（替代原明文 toast）
+const resetPwModal = ref(null)
 
 const statCards = computed(() => [
   { icon: '👥', label: '用户总数', value: stats.value.users || 0 },
@@ -170,10 +193,25 @@ function generatePw() {
   return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
 }
 
+// P1-16：重置密码改弹窗显示 + 复制按钮（不再用明文 toast）
 async function resetPw(id) {
   const pw = generatePw()
-  try { await resetPassword(id, pw); toast(`新密码: ${pw}`, 'success') }
-  catch (e) { toast(e.message, 'error') }
+  try {
+    await resetPassword(id, pw)
+    resetPwModal.value = { userId: id, password: pw }
+  } catch (e) {
+    toast(e.message, 'error')
+  }
+}
+
+async function copyPassword() {
+  if (!resetPwModal.value) return
+  try {
+    await navigator.clipboard.writeText(resetPwModal.value.password)
+    toast('已复制到剪贴板', 'success')
+  } catch {
+    toast('复制失败，请手动选择', 'error')
+  }
 }
 
 onMounted(loadAll)

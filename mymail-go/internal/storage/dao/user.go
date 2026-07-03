@@ -118,9 +118,15 @@ type CreateUserInput struct {
 	PasswordHash string
 	DisplayName  string // 空则用 username
 	Role         string // 空则 "user"
+	StorageLimit int64  // 0 表示使用默认值 100MB（P1-14 修复：管理员创建用户直接设置配额）
 }
 
+// DefaultStorageLimit 默认存储配额（100MB），与 001_initial_schema 一致。
+const DefaultStorageLimit int64 = 104857600
+
 // Create 插入新用户，返回新用户 ID。
+//
+// P1-14 修复：直接在 INSERT 中设置 storage_limit，无需后续 updateStorageUsed 调用。
 func (d *UserDAO) Create(ctx context.Context, in CreateUserInput) (int64, error) {
 	if in.DisplayName == "" {
 		in.DisplayName = in.Username
@@ -128,9 +134,12 @@ func (d *UserDAO) Create(ctx context.Context, in CreateUserInput) (int64, error)
 	if in.Role == "" {
 		in.Role = "user"
 	}
-	const q = `INSERT INTO users (username, email, password_hash, display_name, role)
-		VALUES (?, ?, ?, ?, ?)`
-	res, err := d.db.ExecContext(ctx, q, in.Username, in.Email, in.PasswordHash, in.DisplayName, in.Role)
+	if in.StorageLimit == 0 {
+		in.StorageLimit = DefaultStorageLimit
+	}
+	const q = `INSERT INTO users (username, email, password_hash, display_name, role, storage_limit)
+		VALUES (?, ?, ?, ?, ?, ?)`
+	res, err := d.db.ExecContext(ctx, q, in.Username, in.Email, in.PasswordHash, in.DisplayName, in.Role, in.StorageLimit)
 	if err != nil {
 		return 0, fmt.Errorf("创建用户失败: %w", err)
 	}
@@ -139,6 +148,26 @@ func (d *UserDAO) Create(ctx context.Context, in CreateUserInput) (int64, error)
 		return 0, fmt.Errorf("获取用户 ID 失败: %w", err)
 	}
 	return id, nil
+}
+
+// UpdateStorageLimit 更新用户存储配额（管理员操作）。
+func (d *UserDAO) UpdateStorageLimit(ctx context.Context, userID int64, limit int64) error {
+	const q = `UPDATE users SET storage_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+	_, err := d.db.ExecContext(ctx, q, limit, userID)
+	if err != nil {
+		return fmt.Errorf("更新 storage_limit 失败: %w", err)
+	}
+	return nil
+}
+
+// UpdateRole 更新用户角色（管理员操作）。
+func (d *UserDAO) UpdateRole(ctx context.Context, userID int64, role string) error {
+	const q = `UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+	_, err := d.db.ExecContext(ctx, q, role, userID)
+	if err != nil {
+		return fmt.Errorf("更新 role 失败: %w", err)
+	}
+	return nil
 }
 
 // UpdateLoginFails 更新登录失败次数。
@@ -253,7 +282,29 @@ func (d *UserDAO) SetActive(ctx context.Context, userID int64, active bool) erro
 	return nil
 }
 
-// Count 返回用户总数。
+// ListAll 查询所有用户（按 ID 升序），管理员后台用。
+func (d *UserDAO) ListAll(ctx context.Context) ([]*User, error) {
+	q := fmt.Sprintf("SELECT %s FROM users ORDER BY id", userColumns)
+	rows, err := d.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("查询所有用户失败: %w", err)
+	}
+	defer rows.Close()
+	var users []*User
+	for {
+		if !rows.Next() {
+			break
+		}
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+// Count 统计用户总数。
 func (d *UserDAO) Count(ctx context.Context) (int64, error) {
 	const q = `SELECT COUNT(*) FROM users`
 	var count int64

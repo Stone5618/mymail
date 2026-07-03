@@ -96,11 +96,13 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getMailList, markRead, markUnread, toggleStar, batchMarkRead, batchDelete as apiBatchDelete } from '@/api'
 import { useFormat } from '@/composables/useFormat'
+import { useToast } from '@/composables/useToast'
 import SkeletonList from '@/components/SkeletonList.vue'
 
 const props = defineProps({ folder: { type: String, default: 'INBOX' } })
 const router = useRouter()
 const { formatDate } = useFormat()
+const { toast } = useToast()
 
 const mails = ref([])
 const page = ref(1)
@@ -184,7 +186,12 @@ async function batchUnread() {
 }
 
 async function batchDelete() {
-  await apiBatchDelete(selected.value).catch(e => toast('删除失败', 'error'))
+  try {
+    await apiBatchDelete(selected.value)
+    toast('已删除', 'success')
+  } catch (e) {
+    toast('删除失败', 'error')
+  }
   loadMails(page.value)
 }
 

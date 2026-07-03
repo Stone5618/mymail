@@ -1,0 +1,100 @@
+# MyMail Alertmanager 告警通知配置
+#
+# 通知策略：
+#   - 默认接收者（default）：邮件通知，用于 warning 级别
+#   - 紧急接收者（critical）：邮件 + Webhook，用于 critical 级别
+#
+# 分组策略：按 alertname + severity 分组，避免告警风暴。
+# 抑制策略：critical 触发时，抑制同名的 warning 告警，减少噪音。
+#
+# 启动：docker run -d -p 9093:9093 -v $(pwd)/deployments/alertmanager:/etc/alertmanager prom/alertmanager
+#
+# 配置项中的 SMTP/Webhook 地址需根据实际环境调整，建议通过环境变量或外部 secrets 注入。
+
+global:
+  # SMTP 中继配置（复用 MyMail 后端 Postfix 或外部邮件服务）
+  smtp_smarthost: postfix:587
+  smtp_from: alertmanager@mymail.local
+  smtp_hello: mymail.local
+  # SMTP 认证（生产环境建议从 secrets 读取）
+  # smtp_auth_username: alertmanager@mymail.local
+  # smtp_auth_password: CHANGE_ME
+  # smtp_require_tls: true
+
+# 告警路由树
+route:
+  # 按 alertname + severity 分组，相同组告警合并发送
+  group_by: ['alertname', 'severity', 'service']
+  # 首次告警等待时间（聚合窗口）
+  group_wait: 30s
+  # 同组告警发送间隔
+  group_interval: 5m
+  # 同一告警重复发送间隔
+  repeat_interval: 4h
+  # 默认接收者
+  receiver: default
+  routes:
+    # critical 级别走紧急通道
+    - matchers:
+        - severity = critical
+      receiver: critical
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: false
+    # warning 级别走默认通道
+    - matchers:
+        - severity = warning
+      receiver: default
+      continue: false
+
+# 接收者配置
+receivers:
+  # 默认接收者：邮件通知（warning 级别）
+  - name: default
+    email_configs:
+      - to: ops@mymail.local
+        from: alertmanager@mymail.local
+        smarthost: postfix:587
+        hello: mymail.local
+        headers:
+          Subject: '[MyMail 告警] {{ .GroupLabels.alertname }}'
+        # 邮件正文包含完整告警详情
+        send_resolved: true
+        # HTML 邮件模板（更易读）
+        html: '{{ template "email.default.html" . }}'
+
+  # 紧急接收者：邮件 + Webhook（critical 级别，触发电话/IM 告警）
+  - name: critical
+    email_configs:
+      - to: ops-critical@mymail.local
+        from: alertmanager@mymail.local
+        smarthost: postfix:587
+        hello: mymail.local
+        headers:
+          Subject: '[MyMail 紧急] {{ .GroupLabels.alertname }}'
+        send_resolved: true
+        html: '{{ template "email.default.html" . }}'
+    webhooks_configs:
+      # Webhook 推送到外部告警平台（钉钉/飞书/企业微信/PagerDuty）
+      - url: http://alert-webhook:5000/critical
+        send_resolved: true
+        max_alerts: 0
+
+# 抑制规则：高级别告警触发时，抑制同名的低级别告警
+inhibit_rules:
+  # critical 告警触发时，抑制同名的 warning 告警
+  - source_matchers:
+      - severity = critical
+    target_matchers:
+      - severity = warning
+    equal: ['alertname', 'service']
+
+  # 服务宕机时，抑制该服务的其他派生告警（避免告警风暴）
+  - source_matchers:
+      - alertname = MymailAppDown
+    target_matchers:
+      - severity = warning
+    equal: ['service']
+
+templates:
+  - /etc/alertmanager/templates/*.tmpl

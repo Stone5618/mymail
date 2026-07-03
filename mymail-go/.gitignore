@@ -1,0 +1,28 @@
+# ============================================================
+# mymail-go 子目录 .gitignore（补充父目录规则）
+# ============================================================
+
+# Go 覆盖率测试产物（父级 *.out 已覆盖 .out 文件，此处补充其他模式）
+*.cov
+cov_*
+coverage_*
+*_cover.txt
+
+# 无扩展名的覆盖率输出文件（go test -coverprofile=<name> 可能生成）
+/handler
+/smtp
+
+# Go workspace 文件（本项目未使用 workspace，但保留规则防止误提交）
+go.work
+go.work.sum
+
+# 构建产物（父级 dist/ 已覆盖 dist/ 目录，此处覆盖根目录二进制）
+/mymail
+/mymail.exe
+
+# ------------------------------------------------------------
+# 例外：强制保留 web/dist/.gitkeep
+# 原因：web/embed.go 使用 //go:embed all:dist，需要 dist/ 目录存在
+# 父级 .gitignore 的 dist/ 规则会忽略整个目录，此处放行 .gitkeep
+# ------------------------------------------------------------
+!web/dist/.gitkeep

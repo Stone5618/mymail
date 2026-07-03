@@ -60,8 +60,9 @@ run:
 	./dist/mymail
 
 # ===== Docker =====
+# 构建上下文为项目根目录（..），以访问 mymail-go/ 和 mymail-vue/
 docker-build:
-	docker build -t mymail:$(VERSION) -f deployments/docker/Dockerfile .
+	docker build -t mymail:$(VERSION) -f deployments/docker/Dockerfile ..
 
 docker-up:
 	docker compose -f deployments/docker/docker-compose.yml up -d

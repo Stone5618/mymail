@@ -105,3 +105,32 @@ var (
 		[]string{"method", "result"},
 	)
 )
+
+// WebSocket 指标（阶段 6 使用）
+var (
+	// WSConnectionsActive 活跃 WebSocket 连接数
+	WSConnectionsActive = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "mymail_ws_connections_active",
+			Help: "活跃 WebSocket 连接数",
+		},
+	)
+
+	// WSConnectionsTotal WebSocket 连接总数
+	WSConnectionsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "mymail_ws_connections_total",
+			Help: "WebSocket 连接总数",
+		},
+		[]string{"result"},
+	)
+
+	// WSMessagesSent WebSocket 发送消息总数
+	WSMessagesSent = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "mymail_ws_messages_sent_total",
+			Help: "WebSocket 发送消息总数",
+		},
+		[]string{"type"},
+	)
+)

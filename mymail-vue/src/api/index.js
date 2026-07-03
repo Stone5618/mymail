@@ -1,5 +1,15 @@
 const BASE = '/api'
 
+// P1-15：延迟导入 router，避免循环依赖（api ← router ← views ← api）
+let _router = null
+async function getRouter() {
+  if (!_router) {
+    const mod = await import('@/router')
+    _router = mod.default
+  }
+  return _router
+}
+
 export function setToken(t) {
   if (t) localStorage.setItem('token', t)
   else localStorage.removeItem('token')
@@ -25,7 +35,10 @@ async function request(path, options = {}) {
 
   if (res.status === 401) {
     setToken(null)
-    window.location.href = '/login'
+    localStorage.removeItem('role')
+    // P1-15：用 router.replace 跳转（无页面刷新），延迟导入避免循环依赖
+    const router = await getRouter()
+    router.replace({ name: 'login' })
     throw new Error('请重新登录')
   }
 

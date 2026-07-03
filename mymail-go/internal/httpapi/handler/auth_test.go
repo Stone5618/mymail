@@ -33,19 +33,25 @@ import (
 	"github.com/mymail/mymail-go/internal/httpapi"
 	"github.com/mymail/mymail-go/internal/httpapi/middleware"
 	"github.com/mymail/mymail-go/internal/service"
+	"github.com/mymail/mymail-go/internal/storage/attachment"
 	"github.com/mymail/mymail-go/internal/storage/dao"
 	"github.com/mymail/mymail-go/internal/storage/db"
 )
 
 // testEnv 测试环境，包含 router 与依赖。
 type testEnv struct {
-	router   *gin.Engine
-	userDAO  *dao.UserDAO
-	jwtMgr   *crypto.JWTManager
-	authSvc  *service.AuthService
+	router      *gin.Engine
+	userDAO     *dao.UserDAO
+	msgDAO      *dao.MessageDAO
+	attachDAO   *dao.AttachmentDAO
+	jwtMgr      *crypto.JWTManager
+	authSvc     *service.AuthService
+	mailSvc     *service.MailService
+	attachStore *attachment.Store
+	attachPath  string
 }
 
-// newTestEnv 创建测试环境：临时 DB + 完整路由。
+// newTestEnv 创建测试环境：临时 DB + 完整路由（含 mail 路由）。
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -61,6 +67,11 @@ func newTestEnv(t *testing.T) *testEnv {
 	t.Cleanup(func() { database.Close() })
 
 	userDAO := dao.NewUserDAO(database)
+	msgDAO := dao.NewMessageDAO(database)
+	attachDAO := dao.NewAttachmentDAO(database)
+	sendLogDAO := dao.NewSendLogDAO(database)
+	queueDAO := dao.NewMailQueueDAO(database)
+
 	jwtMgr, err := crypto.NewJWTManager("test-secret-key-for-handler-test-32chars", "24h", "720h")
 	if err != nil {
 		t.Fatalf("创建 JWT 管理器失败: %v", err)
@@ -73,12 +84,20 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	maildirPath := filepath.Join(t.TempDir(), "maildir")
 	authSvc := service.NewAuthService(userDAO, jwtMgr, auditLogger, "example.com", maildirPath)
+	mailSvc := service.NewMailService(
+		msgDAO, attachDAO, sendLogDAO, queueDAO, userDAO,
+		database, auditLogger, "example.com", 10,
+	)
 
+	attachmentPath := filepath.Join(t.TempDir(), "attachments")
 	cfg := &config.Config{
 		Env:                "test",
 		CORSAllowedOrigins: []string{"http://localhost:5173"},
 		MetricsEnabled:     false,
+		AttachmentPath:     attachmentPath,
+		MaxAttachmentSize:  10 * 1024 * 1024, // 10MB
 	}
+	attachStore := attachment.New(cfg)
 
 	router := httpapi.NewRouter(httpapi.Deps{
 		Cfg:         cfg,
@@ -86,13 +105,20 @@ func newTestEnv(t *testing.T) *testEnv {
 		UserDAO:     userDAO,
 		JWTManager:  jwtMgr,
 		AuthService: authSvc,
+		MailService: mailSvc,
+		AttachStore: attachStore,
 	})
 
 	return &testEnv{
-		router:   router,
-		userDAO:  userDAO,
-		jwtMgr:   jwtMgr,
-		authSvc:  authSvc,
+		router:      router,
+		userDAO:     userDAO,
+		msgDAO:      msgDAO,
+		attachDAO:   attachDAO,
+		jwtMgr:      jwtMgr,
+		authSvc:     authSvc,
+		mailSvc:     mailSvc,
+		attachStore: attachStore,
+		attachPath:  attachmentPath,
 	}
 }
 
