@@ -32,6 +32,39 @@ internal/httpapi/
 
 调用层次：`HTTP Request → 全局中间件链 → 路由组中间件 → 端点中间件 → Handler → Service → DAO`。Handler 不直接操作数据库，所有业务逻辑下沉到 service 层。
 
+一个典型的 JWT 认证请求会按以下顺序穿过各层：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant Gin as Gin Engine
+    participant CORS as CORS Middleware
+    participant Auth as Authenticate Middleware
+    participant H as Handler
+    participant CU as CurrentUser
+    participant S as Service
+    participant D as DAO
+    participant DB as Database
+
+    C->>Gin: 发送 HTTP 请求
+    Gin->>CORS: 经过全局中间件链
+    CORS->>Auth: Origin 校验通过
+    Auth->>Auth: 提取并校验 JWT
+    Auth->>DB: 查库验证用户
+    DB-->>Auth: 用户有效
+    Auth->>H: 注入 user，进入 handler
+    H->>CU: CurrentUser(c) 取用户
+    CU-->>H: 返回 *dao.User
+    H->>S: 调用 Service 方法
+    S->>D: 调用 DAO 方法
+    D->>DB: 执行 SQL
+    DB-->>D: 返回结果
+    D-->>S: 返回数据
+    S-->>H: 返回业务结果
+    H-->>C: JSON 响应
+```
+
 ---
 
 ## 1. 路由注册 internal/httpapi/router.go
@@ -89,6 +122,18 @@ r.Use(middleware.CORS(deps.Cfg))    // 5. CORS 跨域处理
 r.Use(middleware.Metrics())         // 6. Prometheus 指标埋点
 ```
 
+下图以可视化方式展示全局中间件的执行顺序：
+
+```mermaid
+flowchart TD
+    Recover["Recover<br/>panic 恢复"] --> Security["Security<br/>安全响应头"]
+    Security --> RequestID["RequestID<br/>生成/透传 X-Request-ID"]
+    RequestID --> RequestLogger["RequestLogger<br/>访问日志"]
+    RequestLogger --> CORS["CORS<br/>跨域白名单"]
+    CORS --> Metrics["Metrics<br/>Prometheus 指标"]
+    Metrics --> RouteHandler["路由 Handler"]
+```
+
 设计要点：
 - `Recover` 必须最外层，保证后续中间件/handler 的 panic 都能被捕获。
 - `RequestID` 在 `RequestLogger` 之前，确保日志能带上 `request_id`。
@@ -107,6 +152,25 @@ r.Use(middleware.Metrics())         // 6. Prometheus 指标埋点
 | `registerAPIV1Routes` | `/api/v1` | APIKeyAuth + 限流 + RequireScope | `FeatureAPIKey && APIKeyService != nil` |
 | `registerRuleRoutes` | `/api/rules` | JWT | `FeatureRules && RuleService != nil` |
 | `/ws` 端点 | `/ws` | WebSocket 子协议/query token | `WSHub != nil` |
+
+```mermaid
+flowchart LR
+    Engine[Gin Engine] --> AuthGroup[/api/auth]
+    Engine --> MailGroup[/api/mail]
+    Engine --> AdminGroup[/api/admin]
+    Engine --> APIKeyGroup[/api/auth/api-keys]
+    Engine --> APIV1Group[/api/v1]
+    Engine --> RuleGroup[/api/rules]
+    Engine --> WSEndpoint[/ws]
+
+    AuthGroup --> AuthAuth[JWT / 公开]
+    MailGroup --> MailAuth[JWT]
+    AdminGroup --> AdminAuth[JWT + Admin]
+    APIKeyGroup --> APIKeyAuth[JWT]
+    APIV1Group --> APIV1Auth[API Key]
+    RuleGroup --> RuleAuth[JWT]
+    WSEndpoint --> WSAuth[WebSocket Token]
+```
 
 各路由组在注册时即绑定对应的鉴权中间件，例如管理员路由链为：
 
@@ -160,6 +224,38 @@ func NewAuthHandler(svc *service.AuthService) *AuthHandler
 ```
 
 Handler 仅持有 `AuthService` 引用，所有业务逻辑（密码哈希、JWT 签发、登录失败计数等）由 service 完成。
+
+```mermaid
+classDiagram
+    class AuthHandler {
+        +svc: AuthService
+    }
+    class MailHandler {
+        +svc: MailService
+        +attachStore: Store
+    }
+    class AdminHandler {
+        +adminSvc: AdminService
+    }
+    class APIKeyHandler {
+        +svc: APIKeyService
+    }
+    class RuleHandler {
+        +svc: RuleService
+    }
+    class WSHandler {
+        +hub: Hub
+        +jwtMgr: JWTManager
+        +userDAO: UserDAO
+    }
+
+    AuthHandler --> AuthService
+    MailHandler --> MailService
+    AdminHandler --> AdminService
+    APIKeyHandler --> APIKeyService
+    RuleHandler --> RuleService
+    WSHandler --> Hub
+```
 
 ### 2.2 注册/登录/资料/密码接口
 
@@ -368,6 +464,26 @@ type AdminHandler struct {
 ```
 
 权限校验在路由层完成（`Authenticate` + `RequireAdmin`），handler 不再重复校验。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client（普通用户）
+    participant Gin as Gin Engine
+    participant Auth as Authenticate
+    participant Admin as RequireAdmin
+    participant H as AdminHandler
+
+    C->>Gin: 请求 /api/admin/users
+    Gin->>Auth: Bearer Token 校验
+    Auth->>DB: 查库验证用户
+    DB-->>Auth: 用户有效（role=user）
+    Auth->>Admin: 注入 user，继续
+    Admin->>Admin: 检查 user.Role == admin
+    Admin-->>Gin: role != admin，Abort 403
+    Gin-->>C: 403 {"error":"需要管理员权限"}
+    Note over Admin,H: Handler 根本不会被执行，<br/>防止越权访问管理员端点
+```
 
 ### 4.2 用户管理接口
 

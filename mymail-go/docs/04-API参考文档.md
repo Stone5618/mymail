@@ -85,6 +85,36 @@ MyMail 后端基于 Gin 框架实现，提供以下几类端点：
 | 500 | Internal Server Error | 服务器内部错误 |
 | 503 | Service Unavailable | 健康检查未就绪 |
 
+下面以登录接口为例，展示一次通用 REST 请求-响应的完整交互过程：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant API as POST /api/auth/login
+    participant H as AuthHandler
+    participant S as AuthService
+    participant D as UserDAO
+    participant DB as Database
+
+    C->>API: POST /api/auth/login
+    Note right of C: body: {email, password, remember}
+    API->>H: 路由分发到 Login
+    H->>H: 绑定并校验 LoginRequest
+    H->>S: Login(ctx, email, password, remember, ip)
+    S->>S: 规范化邮箱、校验密码
+    S->>D: FindByEmail
+    D->>DB: SELECT user
+    DB-->>D: user 记录
+    D-->>S: 返回用户
+    S->>S: 生成 JWT token
+    S-->>H: 返回 LoginResult
+    H-->>API: 构造 AuthResponse
+    API-->>C: 200 {message, token, user}
+```
+
+这张图展示了客户端、Handler、Service、DAO 与数据库之间的标准调用链。所有 REST 端点都遵循这一模式：请求进入 Handler 后，由 Service 处理业务，再经 DAO 访问数据库，最终把结果序列化为 JSON 返回。
+
 ---
 
 ## 1. 认证接口 `/api/auth/*`
@@ -1074,6 +1104,37 @@ curl -X POST http://localhost:8080/api/mail/send \
 
 > **认证链**：API Key Bearer（`APIKeyAuth`）→ `APIKeyRateLimiter`（per-key 限流）→ `RequireScope("send")`。
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client（外部程序）
+    participant API as POST /api/v1/send
+    participant Key as APIKeyAuth
+    participant RL as APIKeyRateLimiter
+    participant Scope as RequireScope
+    participant H as APIV1Handler
+    participant S as MailService
+
+    C->>API: POST /api/v1/send
+    Note right of C: Authorization: Bearer mk_xxx
+    API->>Key: 提取 Bearer token
+    Key->>Key: prefix 索引 + bcrypt 校验
+    Key->>DB: 查用户有效性
+    DB-->>Key: 有效
+    Key->>RL: 注入 user + api_key
+    RL->>RL: 固定窗口限流检查
+    RL->>Scope: 通过
+    Scope->>Scope: 校验 scopes 含 send
+    Scope->>H: 进入 handler
+    H->>H: 绑定 JSON、校验收件人
+    H->>S: Send(ctx, userID, sendInput)
+    S-->>H: 返回 SendResult
+    H-->>API: 构造 APISendResponse
+    API-->>C: 200 {message, queue_id}
+```
+
+该图说明了外部调用 `/api/v1/send` 时的三层安全关卡：先通过 `APIKeyAuth` 确认身份，再由 `APIKeyRateLimiter` 检查是否超过每分钟配额，最后 `RequireScope` 校验 Key 是否具备 `send` 权限。任一关卡失败都会立即返回 401/403/429，不会进入业务 Handler。
+
 ### POST /api/v1/send
 
 **功能**：外部程序通过 API Key 发信。
@@ -1286,6 +1347,36 @@ Content-Type: application/json
 ---
 
 ## 7. WebSocket `/ws`
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client（前端）
+    participant WS as GET /ws
+    participant Auth as WebSocket Auth
+    participant Hub as Hub
+    participant ClientConn as Client 连接
+    participant Event as 新邮件事件源
+
+    C->>WS: GET /ws（Upgrade）
+    Note right of C: Sec-WebSocket-Protocol: auth.<token><br/>或 ?token=xxx
+    WS->>Auth: 提取并校验 token
+    Auth->>DB: JWT 验证 + 查用户
+    DB-->>Auth: 有效用户
+    Auth-->>WS: 返回 userID
+    WS->>WS: websocket.Accept 升级
+    WS->>Hub: Register(userID, client)
+    Hub-->>WS: 注册成功
+    WS->>ClientConn: 发送 connected 欢迎消息
+    Note over C,ClientConn: 长连接保持，等待推送
+
+    Event->>Hub: 新邮件到达事件
+    Hub->>Hub: 查找该用户在线 client
+    Hub->>ClientConn: Broadcast new_mail 消息
+    ClientConn-->>C: 收到 {type:"new_mail", data:{...}}
+```
+
+上图左侧展示 WebSocket 握手与注册流程：客户端通过子协议或 URL 参数携带 token，服务器完成 JWT 校验后接受升级，并把该连接注册到 Hub。右侧展示推送场景：当后台收到新邮件事件时，Hub 会找到目标用户的连接并把消息广播出去，前端即可实时刷新收件箱。
 
 ### GET /ws
 
