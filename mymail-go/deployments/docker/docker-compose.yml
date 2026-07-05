@@ -4,6 +4,10 @@ services:
     build:
       context: ../../..
       dockerfile: mymail-go/deployments/docker/Dockerfile
+      args:
+        - VERSION=${VERSION:-docker}
+        - BUILD_TIME=${BUILD_TIME:-}
+        - COMMIT_SHA=${COMMIT_SHA:-}
     container_name: mymail-app
     user: root
     cap_add:

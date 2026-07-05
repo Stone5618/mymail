@@ -21,8 +21,16 @@ COPY mymail-go/go.mod mymail-go/go.sum ./
 RUN go mod download
 COPY mymail-go/ .
 COPY --from=frontend-builder /web/dist ./web/dist/
+
+# 构建参数：版本、构建时间、Commit SHA（由 CI/部署脚本注入）
+ARG VERSION=docker
+ARG BUILD_TIME
+ARG COMMIT_SHA
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w -X main.version=docker" \
+    -ldflags="-s -w \
+      -X main.Version=${VERSION} \
+      -X main.BuildTime=${BUILD_TIME} \
+      -X main.CommitSHA=${COMMIT_SHA}" \
     -o /mymail ./cmd/mymail
 
 # ===== Stage 3: 运行时 =====
