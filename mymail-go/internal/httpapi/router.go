@@ -262,6 +262,7 @@ func registerAdminRoutes(r *gin.Engine, deps Deps) {
 	g.Use(middleware.RequireAdmin())
 	{
 		g.GET("/stats", adminH.Stats)
+		g.GET("/dns-status", adminH.CheckDns)
 		g.GET("/users", adminH.ListUsers)
 		g.GET("/users/:id", adminH.GetUser)
 		g.POST("/users", adminH.CreateUser)

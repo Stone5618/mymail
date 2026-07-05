@@ -1,5 +1,6 @@
 services:
   app:
+    image: mymail-app:latest
     build:
       context: ../../..
       dockerfile: mymail-go/deployments/docker/Dockerfile

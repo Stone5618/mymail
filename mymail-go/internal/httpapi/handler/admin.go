@@ -57,8 +57,24 @@ func (h *AdminHandler) Stats(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, dto.AdminStatsResponse{
-		TotalUsers:  stats.TotalUsers,
-		ActiveUsers: stats.ActiveUsers,
+		TotalUsers:    stats.TotalUsers,
+		ActiveUsers:   stats.ActiveUsers,
+		TodayReceived: stats.TodayReceived,
+		TodaySent:     stats.TodaySent,
+	})
+}
+
+// CheckDns GET /api/admin/dns-status
+func (h *AdminHandler) CheckDns(c *gin.Context) {
+	status, err := h.adminSvc.CheckDns(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusOK, dto.DnsStatusResponse{MX: "missing", SPF: "missing", DMARC: "missing"})
+		return
+	}
+	c.JSON(http.StatusOK, dto.DnsStatusResponse{
+		MX:    status.MX,
+		SPF:   status.SPF,
+		DMARC: status.DMARC,
 	})
 }
 

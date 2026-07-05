@@ -26,7 +26,8 @@ func newTestAdminService(t *testing.T) (*AdminService, *dao.UserDAO) {
 	database := newTestDBForService(t)
 	userDAO := dao.NewUserDAO(database)
 	settingsDAO := dao.NewSettingsDAO(database)
-	svc := NewAdminService(userDAO, settingsDAO, newTestAuditLogger(t, database))
+	msgDAO := dao.NewMessageDAO(database)
+	svc := NewAdminService(userDAO, settingsDAO, msgDAO, newTestAuditLogger(t, database), "example.com")
 	return svc, userDAO
 }
 

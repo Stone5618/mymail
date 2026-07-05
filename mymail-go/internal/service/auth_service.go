@@ -430,6 +430,7 @@ func (s *AuthService) recordFailedLogin(ctx context.Context, email, ip, reason s
 
 // createMaildir 创建用户 maildir 目录结构。
 // 与原 Node.js 一致：{maildirPath}/{domain}/{username}/{cur,new,tmp}
+// 目录所有者固定为 1000:1000，与 Dovecot 容器内 vmail 用户保持一致。
 func (s *AuthService) createMaildir(username string) {
 	if s.maildirPath == "" {
 		return
@@ -439,11 +440,21 @@ func (s *AuthService) createMaildir(username string) {
 		domain = "localhost"
 	}
 	base := filepath.Join(s.maildirPath, domain, username)
+	if err := os.MkdirAll(base, 0755); err != nil {
+		slog.Error("创建 maildir 基础目录失败", "dir", base, "error", err)
+		return
+	}
+	if err := os.Chown(base, 1000, 1000); err != nil {
+		slog.Warn("设置 maildir 基础目录所有者失败", "dir", base, "error", err)
+	}
 	for _, sub := range []string{"cur", "new", "tmp"} {
 		dir := filepath.Join(base, sub)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			slog.Error("创建 maildir 失败", "dir", dir, "error", err)
 			return
+		}
+		if err := os.Chown(dir, 1000, 1000); err != nil {
+			slog.Warn("设置 maildir 子目录所有者失败", "dir", dir, "error", err)
 		}
 	}
 }

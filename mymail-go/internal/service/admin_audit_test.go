@@ -80,7 +80,8 @@ func newAdminServiceWithAudit(t *testing.T) (*AdminService, *db.DB) {
 
 	userDAO := dao.NewUserDAO(database)
 	settingsDAO := dao.NewSettingsDAO(database)
-	svc := NewAdminService(userDAO, settingsDAO, auditLogger)
+	msgDAO := dao.NewMessageDAO(database)
+	svc := NewAdminService(userDAO, settingsDAO, msgDAO, auditLogger, "example.com")
 	return svc, database
 }
 

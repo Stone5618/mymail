@@ -10,7 +10,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
+	"strings"
 
 	"github.com/mymail/mymail-go/internal/audit"
 	"github.com/mymail/mymail-go/internal/crypto"
@@ -21,13 +23,17 @@ import (
 type AdminService struct {
 	userDAO     *dao.UserDAO
 	settingsDAO *dao.SettingsDAO
+	msgDAO      *dao.MessageDAO
 	audit       *audit.Logger
+	domain      string
 }
 
 // AdminStats 管理员统计数据。
 type AdminStats struct {
-	TotalUsers  int64 `json:"total_users"`
-	ActiveUsers int64 `json:"active_users"`
+	TotalUsers     int64 `json:"total_users"`
+	ActiveUsers    int64 `json:"active_users"`
+	TodayReceived  int64 `json:"today_received"`
+	TodaySent      int64 `json:"today_sent"`
 }
 
 // CreateUserAdminInput 管理员创建用户输入。
@@ -49,15 +55,61 @@ type UpdateUserAdminInput struct {
 }
 
 // NewAdminService 创建 AdminService。
-func NewAdminService(userDAO *dao.UserDAO, settingsDAO *dao.SettingsDAO, auditLogger *audit.Logger) *AdminService {
+func NewAdminService(userDAO *dao.UserDAO, settingsDAO *dao.SettingsDAO, msgDAO *dao.MessageDAO, auditLogger *audit.Logger, domain string) *AdminService {
 	return &AdminService{
 		userDAO:     userDAO,
 		settingsDAO: settingsDAO,
+		msgDAO:      msgDAO,
 		audit:       auditLogger,
+		domain:      domain,
 	}
 }
 
-// Stats 返回用户统计数据。
+// DnsStatus DNS 记录检测结果。
+type DnsStatus struct {
+	MX    string
+	SPF   string
+	DMARC string
+}
+
+// CheckDns 检测当前域名 MX/SPF/DMARC 记录配置。
+func (s *AdminService) CheckDns(ctx context.Context) (*DnsStatus, error) {
+	domain := s.domain
+	if domain == "" {
+		return nil, fmt.Errorf("未配置域名")
+	}
+
+	status := &DnsStatus{MX: "missing", SPF: "missing", DMARC: "missing"}
+
+	// MX 记录
+	if records, err := net.LookupMX(domain); err == nil && len(records) > 0 {
+		status.MX = "ok"
+	}
+
+	// SPF 记录
+	if records, err := net.LookupTXT(domain); err == nil {
+		for _, r := range records {
+			if strings.HasPrefix(r, "v=spf1") {
+				status.SPF = "ok"
+				break
+			}
+		}
+	}
+
+	// DMARC 记录
+	if records, err := net.LookupTXT("_dmarc." + domain); err == nil {
+		for _, r := range records {
+			if strings.HasPrefix(r, "v=DMARC1") {
+				status.DMARC = "ok"
+				break
+			}
+		}
+	}
+
+	return status, nil
+}
+
+// Stats 返回用户统计数据（含今日邮件收发量）。
 func (s *AdminService) Stats(ctx context.Context) (*AdminStats, error) {
 	total, err := s.userDAO.Count(ctx)
 	if err != nil {
@@ -67,7 +119,17 @@ func (s *AdminService) Stats(ctx context.Context) (*AdminStats, error) {
 	if err != nil {
 		return nil, fmt.Errorf("统计活跃用户数失败: %w", err)
 	}
-	return &AdminStats{TotalUsers: total, ActiveUsers: active}, nil
+
+	stats := &AdminStats{TotalUsers: total, ActiveUsers: active}
+	if s.msgDAO != nil {
+		if rcv, err := s.msgDAO.TodayReceivedCount(ctx); err == nil {
+			stats.TodayReceived = rcv
+		}
+		if sent, err := s.msgDAO.TodaySentCount(ctx); err == nil {
+			stats.TodaySent = sent
+		}
+	}
+	return stats, nil
 }
 
 // ListUsers 列出所有用户。

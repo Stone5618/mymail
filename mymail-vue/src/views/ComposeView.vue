@@ -96,6 +96,8 @@
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DOMPurify from 'dompurify'
+import Quill from 'quill'
+import 'quill/dist/quill.snow.css'
 import { useAuthStore } from '@/stores/auth'
 import { sendMail, saveDraft, getMail, deleteMail } from '@/api'
 import { useToast } from '@/composables/useToast'
@@ -206,26 +208,15 @@ async function setBodyHtml(html) {
 
 async function loadQuill() {
   try {
-    if (!window.Quill) {
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('timeout')), 8000)
-        const link = document.createElement('link')
-        link.rel = 'stylesheet'
-        link.href = 'https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css'
-        document.head.appendChild(link)
-        const script = document.createElement('script')
-        script.src = 'https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js'
-        script.onload = () => { clearTimeout(timeout); resolve() }
-        script.onerror = () => { clearTimeout(timeout); reject(new Error('load failed')) }
-        document.head.appendChild(script)
-      })
-    }
     await nextTick()
     if (editorRef.value) {
-      quill = new window.Quill(editorRef.value, { theme: 'snow', placeholder: '写点什么...' })
+      quill = new Quill(editorRef.value, { theme: 'snow', placeholder: '写点什么...' })
       quillReady.value = true
     }
-  } catch { quillFailed.value = true }
+  } catch {
+    console.error('[ComposeView] Quill init failed')
+    quillFailed.value = true
+  }
 }
 
 async function loadDraft() {

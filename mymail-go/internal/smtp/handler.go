@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net"
 	"net/mail"
 	"strings"
@@ -23,6 +24,10 @@ import (
 	mailmsg "github.com/emersion/go-message/mail"
 	smtpsrv "github.com/emersion/go-smtp"
 	"github.com/google/uuid"
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/encoding/korean"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/traditionalchinese"
 
 	"github.com/mymail/mymail-go/internal/config"
 	"github.com/mymail/mymail-go/internal/service"
@@ -305,6 +310,100 @@ func (s *session) Logout() error {
 	return nil
 }
 
+// wordDecoder 解码 MIME encoded-word（RFC 2047），支持常见中文/日文/韩文字符集。
+var wordDecoder = &mime.WordDecoder{
+	CharsetReader: charsetReader,
+}
+
+// charsetReader 返回指定字符集的解码 reader。
+func charsetReader(charset string, input io.Reader) (io.Reader, error) {
+	cs := strings.ToLower(charset)
+	switch cs {
+	case "gbk", "gb2312", "gb18030", "cp936":
+		return simplifiedchinese.GB18030.NewDecoder().Reader(input), nil
+	case "big5":
+		return traditionalchinese.Big5.NewDecoder().Reader(input), nil
+	case "shift_jis", "shift-jis", "sjis":
+		return japanese.ShiftJIS.NewDecoder().Reader(input), nil
+	case "euc-jp":
+		return japanese.EUCJP.NewDecoder().Reader(input), nil
+	case "euc-kr":
+		return korean.EUCKR.NewDecoder().Reader(input), nil
+	default:
+		return input, nil
+	}
+}
+
+// decodeMimeHeader 解码 MIME encoded-word 头部字段。
+// 解码失败时返回原始值，避免丢失信息。
+func decodeMimeHeader(s string) string {
+	if s == "" {
+		return ""
+	}
+	decoded, err := wordDecoder.DecodeHeader(s)
+	if err != nil {
+		return s
+	}
+	return decoded
+}
+
+// decodeAddressNames 解码地址列表中的显示名。
+func decodeAddressNames(addrs []*mail.Address) {
+	for _, a := range addrs {
+		if a != nil {
+			a.Name = decodeMimeHeader(a.Name)
+		}
+	}
+}
+
+// parseAddressHeader 从头部字段解析单个邮件地址。
+// 兼容整个地址被编码成 encoded-word 的非标准头部（如 Python smtplib 生成）。
+func parseAddressHeader(h mailmsg.Header, key string) (addr, name string) {
+	raw := h.Get(key)
+	if raw == "" {
+		return "", ""
+	}
+	decoded := decodeMimeHeader(raw)
+	if decoded == "" {
+		return "", ""
+	}
+	// 单个头部可能包含多个地址（不规范），取第一个
+	parts := strings.Split(decoded, ",")
+	first := strings.TrimSpace(parts[0])
+	if a, err := mail.ParseAddress(first); err == nil && a != nil {
+		return a.Address, decodeMimeHeader(a.Name)
+	}
+	// 解析失败时兜底：若包含 <addr> 则提取，否则整体作为地址
+	if idx := strings.Index(first, "<"); idx >= 0 {
+		end := strings.Index(first[idx:], ">")
+		if end > 0 {
+			return first[idx+1 : idx+end], strings.TrimSpace(strings.Trim(first[:idx], `"`))
+		}
+	}
+	return first, ""
+}
+
+// parseAddressListHeader 从头部字段解析多个邮件地址，返回逗号分隔的地址列表。
+func parseAddressListHeader(h mailmsg.Header, key string) string {
+	raw := h.Get(key)
+	if raw == "" {
+		return ""
+	}
+	decoded := decodeMimeHeader(raw)
+	if decoded == "" {
+		return ""
+	}
+	if list, err := mail.ParseAddressList(decoded); err == nil && len(list) > 0 {
+		addrs := make([]string, len(list))
+		for i, a := range list {
+			addrs[i] = a.Address
+		}
+		return strings.Join(addrs, ", ")
+	}
+	// 解析失败时返回原始解码值
+	return decoded
+}
+
 // ============ 邮件解析 ============
 
 // parsedMail 解析后的邮件数据。
@@ -343,30 +442,18 @@ func parseMail(data []byte) (*parsedMail, error) {
 
 	out := &parsedMail{}
 
-	// 提取头部字段
+	// 提取头部字段（显示名需解码 MIME encoded-word）
 	out.messageID, _ = r.Header.MessageID()
 	out.subject, _ = r.Header.Subject()
-	if fromList, err := r.Header.AddressList("From"); err == nil && len(fromList) > 0 {
-		out.fromAddr = fromList[0].Address
-		out.fromName = fromList[0].Name
-	}
-	if toList, err := r.Header.AddressList("To"); err == nil && len(toList) > 0 {
-		addrs := make([]string, len(toList))
-		for i, a := range toList {
-			addrs[i] = a.Address
-		}
-		out.toAddr = strings.Join(addrs, ", ")
-	}
-	if ccList, err := r.Header.AddressList("Cc"); err == nil && len(ccList) > 0 {
-		addrs := make([]string, len(ccList))
-		for i, a := range ccList {
-			addrs[i] = a.Address
-		}
-		out.ccAddr = strings.Join(addrs, ", ")
-	}
-	if rtList, err := r.Header.AddressList("Reply-To"); err == nil && len(rtList) > 0 {
-		out.replyTo = rtList[0].Address
-	}
+	out.subject = decodeMimeHeader(out.subject)
+
+	// 某些客户端（如 Python smtplib）会把整个 From 地址编码成单个 encoded-word，
+	// go-message 的 AddressList 无法直接解析。先对原始头部完整解码，再解析地址。
+	out.fromAddr, out.fromName = parseAddressHeader(r.Header, "From")
+	out.toAddr = parseAddressListHeader(r.Header, "To")
+	out.ccAddr = parseAddressListHeader(r.Header, "Cc")
+	out.replyTo, _ = parseAddressHeader(r.Header, "Reply-To")
+
 	if inReplyToList, err := r.Header.MsgIDList("In-Reply-To"); err == nil && len(inReplyToList) > 0 {
 		out.inReplyTo = inReplyToList[0]
 	}

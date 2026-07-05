@@ -16,6 +16,7 @@
     "@tailwindcss/vite": "^4.2.4",
     "dompurify": "^3.2.4",
     "pinia": "^3.0.4",
+    "quill": "^2.0.3",
     "tailwindcss": "^4.2.4",
     "vue": "^3.5.32",
     "vue-router": "^5.0.6"

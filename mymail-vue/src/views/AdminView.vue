@@ -149,12 +149,21 @@ const statCards = computed(() => [
 ])
 
 async function loadAll() {
+  // 分别处理，避免 DNS 检测接口异常影响用户列表和统计
   try {
-    const [u, s, d] = await Promise.all([getUsers(), getStats(), checkDns()])
-    users.value = u.users || []
-    stats.value = { users: s.totalUsers || 0, messages: (s.todayReceived || 0), sent: (s.todaySent || 0) }
+    const u = await getUsers()
+    users.value = Array.isArray(u) ? u : (u.users || [])
+  } catch (e) { console.error('[AdminView] load users failed:', e) }
+
+  try {
+    const s = await getStats()
+    stats.value = { users: s.total_users || 0, messages: (s.today_received || 0), sent: (s.today_sent || 0) }
+  } catch (e) { console.error('[AdminView] load stats failed:', e) }
+
+  try {
+    const d = await checkDns()
     dns.value = formatDns(d)
-  } catch {}
+  } catch (e) { console.error('[AdminView] load dns failed:', e) }
 }
 
 async function loadDns() {

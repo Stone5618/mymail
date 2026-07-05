@@ -104,7 +104,7 @@ func New(ctx context.Context, cfg *config.Config) (*Server, error) {
 	//   - RuleService 处理用户邮件规则 CRUD
 	//   注：每用户 API Key 上限 10 把
 	apiKeySvc := service.NewAPIKeyService(apiKeyDAO, auditLogger, 10)
-	adminSvc := service.NewAdminService(userDAO, settingsDAO, auditLogger)
+	adminSvc := service.NewAdminService(userDAO, settingsDAO, msgDAO, auditLogger, cfg.Domain)
 	ruleSvc := service.NewRuleService(ruleDAO)
 
 	// 6.2 初始化附件文件存储（P0-7：内部含 MIME 白名单 + 魔数校验）

@@ -716,6 +716,71 @@ func TestNewReceiver_InvalidTLS(t *testing.T) {
 	}
 }
 
+// TestParseMail_EncodedWord 验证 From 显示名与 Subject 的 MIME encoded-word（RFC 2047）解码。
+func TestParseMail_EncodedWord(t *testing.T) {
+	raw := []byte("From: =?utf-8?B?WWlMaW4=?= <563165573@qq.com>\r\n" +
+		"To: admin@pymt.qzz.io\r\n" +
+		"Subject: =?utf-8?B?UmU6IEZ3ZDogbmloYW8=?=\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: text/plain; charset=utf-8\r\n" +
+		"\r\n" +
+		"test\r\n")
+
+	parsed, err := parseMail(raw)
+	if err != nil {
+		t.Fatalf("解析邮件失败: %v", err)
+	}
+	if parsed.fromName != "YiLin" {
+		t.Errorf("from_name 解码错误，期望 'YiLin'，实际 %q", parsed.fromName)
+	}
+	if parsed.fromAddr != "563165573@qq.com" {
+		t.Errorf("from_addr 期望 '563165573@qq.com'，实际 %q", parsed.fromAddr)
+	}
+	if parsed.subject != "Re: Fwd: nihao" {
+		t.Errorf("subject 解码错误，期望 'Re: Fwd: nihao'，实际 %q", parsed.subject)
+	}
+}
+
+// TestDecodeMimeHeader_GBK 验证 GBK/GB2312 encoded-word 解码。
+func TestDecodeMimeHeader_GBK(t *testing.T) {
+	// "测试" 的 GBK base64 编码
+	encoded := "=?gbk?B?suLK1A==?="
+	decoded := decodeMimeHeader(encoded)
+	if decoded != "测试" {
+		t.Errorf("GBK 解码错误，期望 '测试'，实际 %q", decoded)
+	}
+}
+
+// TestParseMail_FullyEncodedAddress 验证整个 From 地址被编码成单个 encoded-word 时仍能正确解析。
+// 某些客户端（如 Python smtplib）会生成这种非标准头部。
+func TestParseMail_FullyEncodedAddress(t *testing.T) {
+	// "测试发件人" <tester@example.com> 的 utf-8 base64 编码
+	raw := []byte("From: =?utf-8?b?Iua1i+ivleWPkeS7tuS6uiIgPHRlc3RlckBleGFtcGxlLmNvbT4=?=\r\n" +
+		"To: admin@pymt.qzz.io\r\n" +
+		"Subject: =?utf-8?b?5rWL6K+V5Li76aKYX+ino+eggemqjOivgQ==?=\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: text/plain; charset=utf-8\r\n" +
+		"\r\n" +
+		"test body\r\n")
+
+	parsed, err := parseMail(raw)
+	if err != nil {
+		t.Fatalf("解析邮件失败: %v", err)
+	}
+	if parsed.fromAddr != "tester@example.com" {
+		t.Errorf("from_addr 解析错误，期望 'tester@example.com'，实际 %q", parsed.fromAddr)
+	}
+	if parsed.fromName != "测试发件人" {
+		t.Errorf("from_name 解码错误，期望 '测试发件人'，实际 %q", parsed.fromName)
+	}
+	if parsed.subject != "测试主题_解码验证" {
+		t.Errorf("subject 解码错误，期望 '测试主题_解码验证'，实际 %q", parsed.subject)
+	}
+	if parsed.toAddr != "admin@pymt.qzz.io" {
+		t.Errorf("to_addr 解析错误，期望 'admin@pymt.qzz.io'，实际 %q", parsed.toAddr)
+	}
+}
+
 // generateTestCert 生成自签名 ECDSA 证书写入文件。
 func generateTestCert(certPath, keyPath string) error {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

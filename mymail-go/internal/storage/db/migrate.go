@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -74,8 +75,13 @@ func (d *DB) Migrate() error {
 		}
 
 		if _, err := tx.ExecContext(ctx, m.content); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("执行迁移 SQL 失败 (v%d): %w", m.version, err)
+			// 幂等保护：若迁移试图添加已存在的列，视为已应用并继续。
+			// 这允许从旧数据库（如开发/测试环境手动改库）平滑升级。
+			if !isDuplicateColumnError(err) {
+				tx.Rollback()
+				return fmt.Errorf("执行迁移 SQL 失败 (v%d): %w", m.version, err)
+			}
+			slog.Warn("迁移列已存在，跳过", "version", m.version, "name", m.name, "error", err)
 		}
 
 		if _, err := tx.ExecContext(ctx,
@@ -159,4 +165,12 @@ func loadMigrations(direction string) ([]migrationFile, error) {
 	})
 
 	return files, nil
+}
+
+// isDuplicateColumnError 判断错误是否为 SQLite "duplicate column name"。
+func isDuplicateColumnError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "duplicate column name")
 }

@@ -9,8 +9,17 @@ package dto
 
 // AdminStatsResponse 管理员统计响应。
 type AdminStatsResponse struct {
-	TotalUsers  int64 `json:"total_users"`
-	ActiveUsers int64 `json:"active_users"`
+	TotalUsers    int64 `json:"total_users"`
+	ActiveUsers   int64 `json:"active_users"`
+	TodayReceived int64 `json:"today_received"`
+	TodaySent     int64 `json:"today_sent"`
+}
+
+// DnsStatusResponse DNS 记录检测响应。
+type DnsStatusResponse struct {
+	MX    string `json:"mx"`
+	SPF   string `json:"spf"`
+	DMARC string `json:"dmarc"`
 }
 
 // AdminUserResponse 管理员视角的用户信息（含敏感字段）。

@@ -67,7 +67,8 @@ func setupAdminTestRouter(t *testing.T) (*gin.Engine, *AdminHandler, *service.Ad
 	database := newTestDB(t)
 	userDAO := dao.NewUserDAO(database)
 	settingsDAO := dao.NewSettingsDAO(database)
-	adminSvc := service.NewAdminService(userDAO, settingsDAO, newTestAuditLogger(t, database))
+	msgDAO := dao.NewMessageDAO(database)
+	adminSvc := service.NewAdminService(userDAO, settingsDAO, msgDAO, newTestAuditLogger(t, database), "example.com")
 	adminHandler := NewAdminHandler(adminSvc)
 
 	r := gin.New()

@@ -49,12 +49,19 @@ func (m *Maildir) subDir(username, sub string) string {
 }
 
 // EnsureUserDirs 创建用户的 new/cur/tmp 三个子目录。
+// 目录所有者固定为 1000:1000，与 Dovecot 容器内 vmail 用户保持一致。
 func (m *Maildir) EnsureUserDirs(username string) error {
+	base := m.userDir(username)
+	if err := os.MkdirAll(base, 0755); err != nil {
+		return fmt.Errorf("创建 maildir 基础目录 %s 失败: %w", base, err)
+	}
+	_ = os.Chown(base, 1000, 1000)
 	for _, sub := range []string{"new", "cur", "tmp"} {
 		dir := m.subDir(username, sub)
 		if err := os.MkdirAll(dir, 0750); err != nil {
 			return fmt.Errorf("创建 maildir 目录 %s 失败: %w", dir, err)
 		}
+		_ = os.Chown(dir, 1000, 1000)
 	}
 	return nil
 }
@@ -62,6 +69,7 @@ func (m *Maildir) EnsureUserDirs(username string) error {
 // SaveNew 将原始邮件数据保存到 new/ 目录。
 // 返回文件名（不含路径）。
 // 与原 Node.js 一致：{timestamp}.{unique8}.{domain}
+// 文件所有者固定为 1000:1000，确保 Dovecot 容器内 vmail 用户可读取。
 func (m *Maildir) SaveNew(username string, data []byte) (string, error) {
 	if err := m.EnsureUserDirs(username); err != nil {
 		return "", err
@@ -70,6 +78,10 @@ func (m *Maildir) SaveNew(username string, data []byte) (string, error) {
 	path := filepath.Join(m.subDir(username, "new"), filename)
 	if err := os.WriteFile(path, data, 0640); err != nil {
 		return "", fmt.Errorf("写入 maildir 文件失败: %w", err)
+	}
+	if err := os.Chown(path, 1000, 1000); err != nil {
+		// 非 Linux 环境可能失败，仅记录警告，不影响投递。
+		fmt.Fprintf(os.Stderr, "设置 maildir 文件所有者失败 %s: %v\n", path, err)
 	}
 	return filename, nil
 }

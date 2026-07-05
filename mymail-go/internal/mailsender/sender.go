@@ -16,6 +16,7 @@ package mailsender
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -158,6 +159,8 @@ func (s *SMTPSender) sendOnce(ctx context.Context, in SendInput) error {
 		clientOpts = append(clientOpts, mail.WithTLSPolicy(mail.TLSMandatory))
 	} else {
 		clientOpts = append(clientOpts, mail.WithTLSPolicy(mail.TLSOpportunistic))
+		// 不强制校验证书：兼容 Postfix 自签名 / snakeoil 证书（与旧 Node.js 行为一致）。
+		clientOpts = append(clientOpts, mail.WithTLSConfig(&tls.Config{InsecureSkipVerify: true}))
 	}
 
 	client, err := mail.NewClient(s.host, clientOpts...)

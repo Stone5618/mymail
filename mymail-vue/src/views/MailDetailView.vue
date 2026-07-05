@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-dark-800">
       <button @click="router.back()" class="btn-ghost text-sm sm:text-base">← 返回</button>
-      <div class="flex items-center gap-1 sm:gap-2">
+      <div v-if="mail" class="flex items-center gap-1 sm:gap-2">
         <!-- 头部操作区：星标 + 功能按钮 -->
         <div class="flex items-center gap-1 sm:gap-2">
           <button
@@ -156,8 +156,10 @@ function reply() {
 }
 
 async function toggleStarred() {
+  if (!mail.value) return
   mail.value.is_starred = mail.value.is_starred ? 0 : 1
   await toggleStar(props.id).catch(() => {
+    if (!mail.value) return
     mail.value.is_starred = mail.value.is_starred ? 0 : 1
   })
 }

@@ -109,7 +109,7 @@ func newTestEnv(t testing.TB) *testEnv {
 		database, auditLogger, cfg.Domain, cfg.SendRateLimitPerMin,
 	)
 	apiKeySvc := service.NewAPIKeyService(apiKeyDAO, auditLogger, 10)
-	adminSvc := service.NewAdminService(userDAO, settingsDAO, auditLogger)
+	adminSvc := service.NewAdminService(userDAO, settingsDAO, auditLogger, cfg.Domain)
 	ruleSvc := service.NewRuleService(ruleDAO)
 
 	// 6. 附件存储
