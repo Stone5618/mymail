@@ -12,7 +12,7 @@
       <!-- Header -->
       <div class="p-4 border-b border-dark-800 flex items-center justify-between">
         <h1 class="text-lg font-bold text-dark-100 flex items-center gap-2">
-          <BaseIcon name="envelope" class="h-6 w-6 text-primary-400" />
+          <LogoIcon :size="24" class="text-primary-400" />
           <span>MyMail</span>
         </h1>
         <button @click="sidebarOpen = false" class="lg:hidden text-dark-500 hover:text-dark-300" aria-label="关闭侧边栏">
@@ -51,8 +51,9 @@
       <!-- User section -->
       <div class="border-t border-dark-800 p-3">
         <div class="flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer hover:bg-dark-800 transition-colors group">
-          <div class="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-sm font-medium">
-            {{ userInitial }}
+          <div class="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-sm font-medium overflow-hidden shrink-0">
+            <img v-if="auth.user?.avatarUrl" :src="auth.user.avatarUrl" class="w-full h-full object-cover" alt="" />
+            <span v-else>{{ userInitial }}</span>
           </div>
           <div class="flex-1 min-w-0">
             <div class="text-sm text-dark-200 truncate">{{ auth.user?.displayName }}</div>
@@ -64,7 +65,7 @@
             aria-label="退出登录"
             title="退出"
           >
-            <BaseIcon name="arrow-left-on-exit" class="h-5 w-5" />
+            <BaseIcon name="arrow-left-start-on-rectangle" class="h-5 w-5" />
           </button>
         </div>
       </div>
@@ -78,7 +79,7 @@
           <BaseIcon name="bars-3" class="h-6 w-6" />
         </button>
         <span class="text-lg font-semibold text-dark-100 flex items-center gap-2">
-          <BaseIcon name="envelope" class="h-5 w-5 text-primary-400" />
+          <LogoIcon :size="20" class="text-primary-400" />
           <span>MyMail</span>
         </span>
         <div class="flex-1" />
@@ -102,6 +103,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useWsStore } from '@/stores/ws'
 import BaseIcon from '@/components/BaseIcon.vue'
+import LogoIcon from '@/components/LogoIcon.vue'
 
 const auth = useAuthStore()
 const ws = useWsStore()

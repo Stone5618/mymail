@@ -75,7 +75,7 @@ func (h *MailHandler) List(c *gin.Context) {
 	// 转换为 DTO
 	messages := make([]*dto.MailDetailResponse, 0, len(result.Messages))
 	for _, m := range result.Messages {
-		messages = append(messages, toMessageResponse(m, nil))
+		messages = append(messages, h.toMessageResponse(m, nil))
 	}
 
 	c.JSON(http.StatusOK, dto.ListResponse{
@@ -142,7 +142,7 @@ func (h *MailHandler) Get(c *gin.Context) {
 		msg.IsRead = true
 	}
 
-	c.JSON(http.StatusOK, toMessageResponse(msg, attachments))
+	c.JSON(http.StatusOK, h.toMessageResponse(msg, attachments))
 }
 
 // ============ 发送/草稿 ============
@@ -552,16 +552,17 @@ func (h *MailHandler) BatchDelete(c *gin.Context) {
 // ============ 辅助函数 ============
 
 // toMessageResponse 将 dao.Message 转为 dto.MailDetailResponse。
-func toMessageResponse(m *dao.Message, attachments []*dao.Attachment) *dto.MailDetailResponse {
+func (h *MailHandler) toMessageResponse(m *dao.Message, attachments []*dao.Attachment) *dto.MailDetailResponse {
 	resp := &dto.MailDetailResponse{
-		ID:          m.ID,
-		UserID:      m.UserID,
-		Folder:      m.Folder,
-		MessageID:   m.MessageID,
-		UID:         m.UID,
-		FromAddr:    m.FromAddr,
-		FromName:    m.FromName,
-		ToAddr:      m.ToAddr,
+		ID:            m.ID,
+		UserID:        m.UserID,
+		Folder:        m.Folder,
+		MessageID:     m.MessageID,
+		UID:           m.UID,
+		FromAddr:      m.FromAddr,
+		FromName:      m.FromName,
+		FromAvatarURL: h.svc.AvatarURL(m.FromAddr),
+		ToAddr:        m.ToAddr,
 		CcAddr:      m.CcAddr,
 		BccAddr:     m.BccAddr,
 		ReplyTo:     m.ReplyTo,

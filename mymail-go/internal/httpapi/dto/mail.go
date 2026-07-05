@@ -34,14 +34,15 @@ type BatchOperationRequest struct {
 // 前端 MailDetailView.vue 直接消费这些字段名。
 // 命名为 MailDetailResponse 避免与 dto/auth.go 的通用 MessageResponse 冲突。
 type MailDetailResponse struct {
-	ID          int64                 `json:"id"`
-	UserID      int64                 `json:"user_id"`
-	Folder      string                `json:"folder"`
-	MessageID   string                `json:"message_id"`
-	UID         *int64                `json:"uid"`
-	FromAddr    string                `json:"from_addr"`
-	FromName    string                `json:"from_name"`
-	ToAddr      string                `json:"to_addr"`
+	ID            int64                 `json:"id"`
+	UserID        int64                 `json:"user_id"`
+	Folder        string                `json:"folder"`
+	MessageID     string                `json:"message_id"`
+	UID           *int64                `json:"uid"`
+	FromAddr      string                `json:"from_addr"`
+	FromName      string                `json:"from_name"`
+	FromAvatarURL string                `json:"from_avatar_url"`
+	ToAddr        string                `json:"to_addr"`
 	CcAddr      string                `json:"cc_addr"`
 	BccAddr     string                `json:"bcc_addr"`
 	ReplyTo     string                `json:"reply_to"`

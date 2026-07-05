@@ -41,7 +41,9 @@ type Config struct {
 	// 邮件存储
 	MaildirPath       string `mapstructure:"MAILDIR_PATH"`
 	AttachmentPath    string `mapstructure:"ATTACHMENT_PATH"`
+	AvatarPath        string `mapstructure:"AVATAR_PATH"`
 	MaxAttachmentSize int64  `mapstructure:"MAX_ATTACHMENT_SIZE"`
+	MaxAvatarSize     int64  `mapstructure:"MAX_AVATAR_SIZE"`
 
 	// 管理员
 	AdminUsername string `mapstructure:"ADMIN_USERNAME"`
@@ -166,7 +168,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("DB_PATH", "./data/mymail.db")
 	v.SetDefault("MAILDIR_PATH", "./data/maildir")
 	v.SetDefault("ATTACHMENT_PATH", "./data/attachments")
+	v.SetDefault("AVATAR_PATH", "./data/avatars")
 	v.SetDefault("MAX_ATTACHMENT_SIZE", 26214400) // 25MB
+	v.SetDefault("MAX_AVATAR_SIZE", 2097152)      // 2MB
 
 	// 管理员
 	v.SetDefault("ADMIN_USERNAME", "admin")

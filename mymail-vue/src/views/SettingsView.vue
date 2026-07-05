@@ -41,6 +41,26 @@
         <div class="card p-4 sm:p-6">
           <h3 class="text-base sm:text-lg font-medium text-dark-100 mb-4">个人信息</h3>
           <div class="space-y-4">
+            <div class="flex items-center gap-4">
+              <div
+                class="relative w-16 h-16 rounded-full bg-primary-600 flex items-center justify-center text-white text-xl font-medium overflow-hidden shrink-0 cursor-pointer group"
+                @click="triggerAvatarUpload"
+              >
+                <img v-if="auth.user?.avatarUrl" :src="auth.user.avatarUrl" class="w-full h-full object-cover" alt="" />
+                <span v-else>{{ userInitial }}</span>
+                <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <BaseIcon name="camera" class="h-5 w-5" />
+                </div>
+                <div v-if="avatarLoading" class="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <BaseSpinner :size="20" />
+                </div>
+              </div>
+              <div>
+                <button @click="triggerAvatarUpload" class="btn-secondary text-sm">更换头像</button>
+                <p class="text-xs text-dark-500 mt-1.5">支持 JPG/PNG/GIF/WebP，最大 2MB</p>
+              </div>
+              <input ref="avatarInput" type="file" accept="image/*" class="hidden" @change="onAvatarSelected" />
+            </div>
             <div>
               <label class="block text-sm text-dark-400 mb-1.5">显示名称</label>
               <input v-model="displayName" type="text" class="input-field" />
@@ -94,14 +114,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useUserPreferencesStore } from '@/stores/userPreferences'
-import { updateProfile, changePassword } from '@/api'
+import { updateProfile, changePassword, uploadAvatar } from '@/api'
 import { useToast } from '@/composables/useToast'
 import BaseIcon from '@/components/BaseIcon.vue'
+import BaseSpinner from '@/components/BaseSpinner.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -115,6 +136,43 @@ const signature = ref('')
 const oldPw = ref('')
 const newPw = ref('')
 const newPw2 = ref('')
+const avatarLoading = ref(false)
+const avatarInput = ref(null)
+
+const userInitial = computed(() => {
+  const name = auth.user?.displayName || auth.user?.email || '?'
+  return name.charAt(0).toUpperCase()
+})
+
+function triggerAvatarUpload() {
+  avatarInput.value?.click()
+}
+
+async function onAvatarSelected(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    toast('请选择图片文件', 'error')
+    return
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    toast('头像大小不能超过 2MB', 'error')
+    return
+  }
+  avatarLoading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('avatar', file)
+    const data = await uploadAvatar(formData)
+    if (auth.user) auth.user.avatarUrl = data.avatarUrl
+    toast('头像已更新', 'success')
+  } catch (err) {
+    toast(err.message || '上传失败', 'error')
+  } finally {
+    avatarLoading.value = false
+    e.target.value = ''
+  }
+}
 
 const themeOptions = [
   { value: 'dark', label: '深色', icon: 'moon' },

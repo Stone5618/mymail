@@ -165,6 +165,18 @@ type MailService struct {
 	maxAttachments int
 }
 
+// AvatarURL 返回邮箱对应的头像 URL。
+// 本域用户优先使用上传头像；外部邮箱使用 Gravatar（国内 cravatar.cn 镜像）。
+func (s *MailService) AvatarURL(email string) string {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if s.domain != "" && strings.HasSuffix(email, "@"+s.domain) {
+		if u, err := s.userDAO.FindByEmail(context.Background(), email); err == nil && u != nil && u.AvatarURL != "" {
+			return u.AvatarURL
+		}
+	}
+	return GravatarURL(email, 128)
+}
+
 // NewMailService 创建邮件服务。
 func NewMailService(
 	msgDAO *dao.MessageDAO,

@@ -83,7 +83,8 @@ func newTestEnv(t *testing.T) *testEnv {
 	t.Cleanup(func() { auditLogger.Close() })
 
 	maildirPath := filepath.Join(t.TempDir(), "maildir")
-	authSvc := service.NewAuthService(userDAO, jwtMgr, auditLogger, "example.com", maildirPath)
+	avatarPath := filepath.Join(t.TempDir(), "avatars")
+	authSvc := service.NewAuthService(userDAO, jwtMgr, auditLogger, "example.com", maildirPath, avatarPath)
 	mailSvc := service.NewMailService(
 		msgDAO, attachDAO, sendLogDAO, queueDAO, userDAO,
 		database, auditLogger, "example.com", 10,

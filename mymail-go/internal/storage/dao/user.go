@@ -15,29 +15,30 @@ import (
 // User 表示 users 表的完整行。
 // 字段名与数据库列名一致（snake_case）。
 type User struct {
-	ID                int64
-	Username          string
-	Email             string
-	PasswordHash      string
+	ID                  int64
+	Username            string
+	Email               string
+	PasswordHash        string
 	DovecotPasswordHash string
-	DisplayName       string // 可空，但 Scan 时若 NULL 则保持空字符串
-	Role              string
-	StorageLimit      int64
-	StorageUsed       int64
-	IsActive          bool
-	LoginFails        int
-	LockedUntil       sql.NullTime
-	IsDefaultPassword bool
-	Signature         sql.NullString
-	Preferences       string // JSON 字符串，默认 '{}'
-	CreatedAt         string
-	UpdatedAt         string
+	DisplayName         string // 可空，但 Scan 时若 NULL 则保持空字符串
+	Role                string
+	StorageLimit        int64
+	StorageUsed         int64
+	IsActive            bool
+	LoginFails          int
+	LockedUntil         sql.NullTime
+	IsDefaultPassword   bool
+	Signature           sql.NullString
+	Preferences         string // JSON 字符串，默认 '{}'
+	AvatarURL           string // 头像 URL，空表示未上传
+	CreatedAt           string
+	UpdatedAt           string
 }
 
 // userColumns 是 users 表的所有列（顺序须与 scanUser 一致）。
 const userColumns = `id, username, email, password_hash, dovecot_password_hash, display_name, role,
 	storage_limit, storage_used, is_active, login_fails, locked_until,
-	is_default_password, signature, preferences, created_at, updated_at`
+	is_default_password, signature, preferences, avatar_url, created_at, updated_at`
 
 // scanUser 将一行数据扫描到 User。
 func scanUser(s interface {
@@ -51,7 +52,7 @@ func scanUser(s interface {
 	err := s.Scan(
 		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DovecotPasswordHash, &displayName, &u.Role,
 		&u.StorageLimit, &u.StorageUsed, &isActive, &u.LoginFails, &u.LockedUntil,
-		&isDefault, &u.Signature, &preferences, &u.CreatedAt, &u.UpdatedAt,
+		&isDefault, &u.Signature, &preferences, &u.AvatarURL, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -117,13 +118,14 @@ func (d *UserDAO) FindByUsername(ctx context.Context, username string) (*User, e
 
 // CreateUserInput 创建用户的输入参数。
 type CreateUserInput struct {
-	Username     string
-	Email        string
-	PasswordHash string
+	Username            string
+	Email               string
+	PasswordHash        string
 	DovecotPasswordHash string
-	DisplayName  string // 空则用 username
-	Role         string // 空则 "user"
-	StorageLimit int64  // 0 表示使用默认值 100MB（P1-14 修复：管理员创建用户直接设置配额）
+	DisplayName         string // 空则用 username
+	Role                string // 空则 "user"
+	StorageLimit        int64  // 0 表示使用默认值 100MB（P1-14 修复：管理员创建用户直接设置配额）
+	AvatarURL           string // 空表示无头像
 }
 
 // DefaultStorageLimit 默认存储配额（100MB），与 001_initial_schema 一致。
@@ -142,9 +144,9 @@ func (d *UserDAO) Create(ctx context.Context, in CreateUserInput) (int64, error)
 	if in.StorageLimit == 0 {
 		in.StorageLimit = DefaultStorageLimit
 	}
-	const q = `INSERT INTO users (username, email, password_hash, dovecot_password_hash, display_name, role, storage_limit)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`
-	res, err := d.db.ExecContext(ctx, q, in.Username, in.Email, in.PasswordHash, in.DovecotPasswordHash, in.DisplayName, in.Role, in.StorageLimit)
+	const q = `INSERT INTO users (username, email, password_hash, dovecot_password_hash, display_name, role, storage_limit, avatar_url)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	res, err := d.db.ExecContext(ctx, q, in.Username, in.Email, in.PasswordHash, in.DovecotPasswordHash, in.DisplayName, in.Role, in.StorageLimit, in.AvatarURL)
 	if err != nil {
 		return 0, fmt.Errorf("创建用户失败: %w", err)
 	}
@@ -213,6 +215,7 @@ type UpdateProfileInput struct {
 	DisplayName *string // nil 表示不更新
 	Signature   *string // nil 表示不更新
 	Preferences *string // nil 表示不更新（JSON 字符串）
+	AvatarURL   *string // nil 表示不更新
 }
 
 // UpdateProfile 动态更新个人资料字段。
@@ -230,6 +233,10 @@ func (d *UserDAO) UpdateProfile(ctx context.Context, userID int64, in UpdateProf
 	if in.Preferences != nil {
 		fields = append(fields, "preferences = ?")
 		args = append(args, *in.Preferences)
+	}
+	if in.AvatarURL != nil {
+		fields = append(fields, "avatar_url = ?")
+		args = append(args, *in.AvatarURL)
 	}
 	if len(fields) == 0 {
 		return nil

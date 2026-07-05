@@ -113,6 +113,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		StorageLimit: user.StorageLimit,
 		StorageUsed:  user.StorageUsed,
 		Preferences:  user.Preferences,
+		AvatarURL:    user.AvatarURL,
 		CreatedAt:    user.CreatedAt,
 	})
 }
@@ -161,6 +162,29 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.MessageResponse{Message: "密码修改成功"})
 }
 
+// UploadAvatar POST /api/auth/avatar
+func (h *AuthHandler) UploadAvatar(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, dto.ErrorResponse{Error: "未登录"})
+		return
+	}
+
+	fileHeader, err := c.FormFile("avatar")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "请选择头像文件"})
+		return
+	}
+
+	avatarURL, err := h.svc.UploadAvatar(c.Request.Context(), user.ID, fileHeader)
+	if err != nil {
+		writeAuthError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.AvatarResponse{AvatarURL: avatarURL})
+}
+
 // ChangeDefaultPassword POST /api/auth/change-default-password
 func (h *AuthHandler) ChangeDefaultPassword(c *gin.Context) {
 	user := middleware.CurrentUser(c)
@@ -191,6 +215,7 @@ func toUserPublic(u *dao.User) dto.UserPublic {
 		Email:       u.Email,
 		DisplayName: u.DisplayName,
 		Role:        u.Role,
+		AvatarURL:   u.AvatarURL,
 	}
 }
 

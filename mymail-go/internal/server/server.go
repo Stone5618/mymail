@@ -92,7 +92,8 @@ func New(ctx context.Context, cfg *config.Config) (*Server, error) {
 	}
 
 	// 6. 初始化 Service 层
-	authSvc := service.NewAuthService(userDAO, jwtMgr, auditLogger, cfg.Domain, cfg.MaildirPath)
+	authSvc := service.NewAuthService(userDAO, jwtMgr, auditLogger, cfg.Domain, cfg.MaildirPath, cfg.AvatarPath)
+	authSvc.SetMaxAvatarSize(cfg.MaxAvatarSize)
 	mailSvc := service.NewMailService(
 		msgDAO, attachDAO, sendLogDAO, queueDAO, userDAO,
 		database, auditLogger, cfg.Domain, cfg.SendRateLimitPerMin,
@@ -118,13 +119,14 @@ func New(ctx context.Context, cfg *config.Config) (*Server, error) {
 	wsHub := ws.NewHub()
 
 	router := httpapi.NewRouter(httpapi.Deps{
-		Cfg:           cfg,
-		DB:            database,
-		UserDAO:       userDAO,
-		JWTManager:    jwtMgr,
-		AuthService:   authSvc,
-		MailService:   mailSvc,
-		AttachStore:   attachStore,
+			Cfg:         cfg,
+			DB:          database,
+			UserDAO:     userDAO,
+			JWTManager:  jwtMgr,
+			AuthService: authSvc,
+			MailService: mailSvc,
+			AttachStore: attachStore,
+			AvatarPath:  cfg.AvatarPath,
 		APIKeyService: apiKeySvc,
 		AdminService:  adminSvc,
 		RuleService:   ruleSvc,

@@ -24,6 +24,7 @@ services:
       - DB_PATH=/app/data/mymail.db
       - MAILDIR_PATH=/app/data/maildir
       - ATTACHMENT_PATH=/app/data/attachments
+      - AVATAR_PATH=/app/data/avatars
       - MAIL_HOST=postfix
       - SMTP_SEND_PORT=587
     networks:

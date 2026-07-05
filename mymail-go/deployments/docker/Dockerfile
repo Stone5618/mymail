@@ -15,22 +15,18 @@ RUN npm run build
 # ===== Stage 2: 后端构建 =====
 FROM golang:1.25-alpine AS backend-builder
 
+ARG VERSION=docker
+ARG BUILD_TIME=
+ARG COMMIT_SHA=
+
 WORKDIR /app
 RUN apk add --no-cache git
 COPY mymail-go/go.mod mymail-go/go.sum ./
 RUN go mod download
 COPY mymail-go/ .
 COPY --from=frontend-builder /web/dist ./web/dist/
-
-# 构建参数：版本、构建时间、Commit SHA（由 CI/部署脚本注入）
-ARG VERSION=docker
-ARG BUILD_TIME
-ARG COMMIT_SHA
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w \
-      -X main.Version=${VERSION} \
-      -X main.BuildTime=${BUILD_TIME} \
-      -X main.CommitSHA=${COMMIT_SHA}" \
+RUN CGO_ENABLED=0 GOOS=linux go build -buildvcs=false \
+    -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.CommitSHA=${COMMIT_SHA}" \
     -o /mymail ./cmd/mymail
 
 # ===== Stage 3: 运行时 =====
@@ -47,7 +43,7 @@ COPY --from=backend-builder /mymail ./mymail
 COPY mymail-go/config/dovecot/ ./config/dovecot/
 COPY mymail-go/config/nginx/ ./config/nginx/
 
-RUN mkdir -p /app/data/maildir /app/data/attachments && \
+RUN mkdir -p /app/data/maildir /app/data/attachments /app/data/avatars && \
     chown -R mymail:mymail /app
 
 USER mymail

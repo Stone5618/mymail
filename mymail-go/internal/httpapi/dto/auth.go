@@ -37,27 +37,29 @@ type ChangeDefaultPasswordRequest struct {
 }
 
 // UserPublic 用户公开信息（login/register 响应中的 user 字段）。
-// 与原 Node.js 响应完全一致：仅 5 字段，camelCase。
+// 与原 Node.js 响应保持一致，camelCase。
 type UserPublic struct {
 	ID          int64  `json:"id"`
 	Username    string `json:"username"`
 	Email       string `json:"email"`
 	DisplayName string `json:"displayName"`
 	Role        string `json:"role"`
+	AvatarURL   string `json:"avatarUrl"`
 }
 
 // UserMe /api/auth/me 响应（字段最全，camelCase）。
 type UserMe struct {
-	ID           int64  `json:"id"`
-	Username     string `json:"username"`
-	Email        string `json:"email"`
-	DisplayName  string `json:"displayName"`
-	Role         string `json:"role"`
+	ID           int64   `json:"id"`
+	Username     string  `json:"username"`
+	Email        string  `json:"email"`
+	DisplayName  string  `json:"displayName"`
+	Role         string  `json:"role"`
 	Signature    *string `json:"signature"`
-	StorageLimit int64  `json:"storageLimit"`
-	StorageUsed  int64  `json:"storageUsed"`
-	Preferences  string `json:"preferences"`
-	CreatedAt    string `json:"createdAt"`
+	StorageLimit int64   `json:"storageLimit"`
+	StorageUsed  int64   `json:"storageUsed"`
+	Preferences  string  `json:"preferences"`
+	AvatarURL    string  `json:"avatarUrl"`
+	CreatedAt    string  `json:"createdAt"`
 }
 
 // AuthResponse 认证成功响应（login/register）。
@@ -67,6 +69,11 @@ type AuthResponse struct {
 	User    UserPublic `json:"user"`
 	// RequirePasswordChange 仅在登录且 is_default_password=1 时为 true
 	RequirePasswordChange bool `json:"requirePasswordChange,omitempty"`
+}
+
+// AvatarResponse 头像上传响应。
+type AvatarResponse struct {
+	AvatarURL string `json:"avatarUrl"`
 }
 
 // MessageResponse 通用消息响应。

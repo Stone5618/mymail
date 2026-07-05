@@ -42,7 +42,10 @@
 
     <!-- Mail list -->
     <div class="flex-1 overflow-y-auto">
-      <SkeletonList v-if="loading" :count="8" />
+      <div v-if="loading" class="flex flex-col items-center justify-center h-full text-dark-500">
+        <BaseSpinner :size="40" />
+        <p class="mt-3 text-sm">加载邮件中...</p>
+      </div>
       <div v-else-if="mails.length === 0" class="flex flex-col items-center justify-center py-20 text-dark-500">
         <div class="mb-3"><BaseIcon name="inbox" class="h-16 w-16" /></div>
         <p class="text-sm">{{ search ? '没有找到匹配的邮件' : '这里空空如也' }}</p>
@@ -69,6 +72,7 @@
           ><BaseIcon name="star" :solid="mail.is_starred" class="h-4 w-4" /></button>
           <!-- 未读蓝点 -->
           <div class="w-1.5 h-1.5 rounded-full shrink-0" :class="mail.is_read ? 'opacity-0' : 'bg-primary-500'" />
+          <AvatarDisplay :src="avatarSrc(mail)" :name="displayName(mail)" :size="32" />
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between mb-0.5">
               <span class="text-sm truncate" :class="mail.is_read ? 'text-dark-300' : 'text-dark-100 font-semibold'">
@@ -104,8 +108,9 @@ import { getMailList, markRead, markUnread, toggleStar, batchMarkRead, batchDele
 import { useFormat } from '@/composables/useFormat'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
-import SkeletonList from '@/components/SkeletonList.vue'
+import BaseSpinner from '@/components/BaseSpinner.vue'
 import BaseIcon from '@/components/BaseIcon.vue'
+import AvatarDisplay from '@/components/AvatarDisplay.vue'
 
 const props = defineProps({ folder: { type: String, default: 'INBOX' } })
 const router = useRouter()
@@ -136,6 +141,11 @@ function toggleSelectAll() {
 function displayName(mail) {
   if (props.folder === 'SENT' || props.folder === 'DRAFTS') return mail.to_addr
   return mail.from_name || mail.from_addr
+}
+
+function avatarSrc(mail) {
+  if (props.folder === 'SENT' || props.folder === 'DRAFTS') return ''
+  return mail.from_avatar_url || ''
 }
 
 async function loadMails(p = 1) {

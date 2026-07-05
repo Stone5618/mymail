@@ -24,7 +24,7 @@ function rw(min, max) {
 
 <style scoped>
 .skel {
-  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background: linear-gradient(90deg, var(--c-bg-elevated) 25%, var(--c-bg-hover) 50%, var(--c-bg-elevated) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }

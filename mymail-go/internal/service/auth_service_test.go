@@ -51,9 +51,10 @@ func newTestAuthService(t *testing.T) (*AuthService, *dao.UserDAO) {
 	}
 	t.Cleanup(func() { auditLogger.Close() })
 
-	// maildirPath 使用临时目录
+	// maildirPath / avatarPath 使用临时目录
 	maildirPath := filepath.Join(t.TempDir(), "maildir")
-	svc := NewAuthService(userDAO, jwtMgr, auditLogger, "example.com", maildirPath)
+	avatarPath := filepath.Join(t.TempDir(), "avatars")
+	svc := NewAuthService(userDAO, jwtMgr, auditLogger, "example.com", maildirPath, avatarPath)
 	return svc, userDAO
 }
 

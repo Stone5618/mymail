@@ -31,25 +31,10 @@
       </div>
     </div>
 
-    <!-- Loading skeleton -->
-    <div v-if="loading" class="flex-1 overflow-y-auto p-4 sm:p-6">
-      <div class="max-w-3xl mx-auto space-y-4">
-        <div class="skel h-7 rounded w-3/4" />
-        <div class="flex items-center gap-3">
-          <div class="skel w-10 h-10 rounded-full" />
-          <div class="space-y-2 flex-1">
-            <div class="skel h-4 rounded w-32" />
-            <div class="skel h-3 rounded w-48" />
-          </div>
-        </div>
-        <div class="border-t border-dark-700 pt-6 space-y-3">
-          <div class="skel h-4 rounded w-full" />
-          <div class="skel h-4 rounded w-5/6" />
-          <div class="skel h-4 rounded w-4/6" />
-          <div class="skel h-4 rounded w-full" />
-          <div class="skel h-4 rounded w-3/6" />
-        </div>
-      </div>
+    <!-- Loading spinner -->
+    <div v-if="loading" class="flex-1 flex flex-col items-center justify-center text-dark-500">
+      <BaseSpinner :size="40" />
+      <p class="mt-3 text-sm">加载邮件中...</p>
     </div>
 
     <!-- Content -->
@@ -59,9 +44,7 @@
 
         <!-- Sender info -->
         <div class="flex items-start gap-3 mb-6">
-          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-violet-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
-            {{ (mail.from_name || mail.from_addr || '?').charAt(0).toUpperCase() }}
-          </div>
+          <AvatarDisplay :src="mail.from_avatar_url" :name="mail.from_name || mail.from_addr" :size="40" />
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between flex-wrap gap-2">
               <div class="text-dark-100 font-medium">{{ mail.from_name || mail.from_addr }}</div>
@@ -134,6 +117,8 @@ import { useFormat } from '@/composables/useFormat'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import BaseIcon from '@/components/BaseIcon.vue'
+import BaseSpinner from '@/components/BaseSpinner.vue'
+import AvatarDisplay from '@/components/AvatarDisplay.vue'
 
 const props = defineProps({ id: { type: [String, Number], required: true } })
 const router = useRouter()
@@ -230,7 +215,7 @@ onMounted(loadMail)
 
 <style scoped>
 .skel {
-  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background: linear-gradient(90deg, var(--c-bg-elevated) 25%, var(--c-bg-hover) 50%, var(--c-bg-elevated) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }

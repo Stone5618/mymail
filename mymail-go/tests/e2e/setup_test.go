@@ -103,13 +103,14 @@ func newTestEnv(t testing.TB) *testEnv {
 	}
 
 	// 5. Service 层
-	authSvc := service.NewAuthService(userDAO, jwtMgr, auditLogger, cfg.Domain, maildirPath)
+	avatarPath := filepath.Join(t.TempDir(), "avatars")
+	authSvc := service.NewAuthService(userDAO, jwtMgr, auditLogger, cfg.Domain, maildirPath, avatarPath)
 	mailSvc := service.NewMailService(
 		msgDAO, attachDAO, sendLogDAO, queueDAO, userDAO,
 		database, auditLogger, cfg.Domain, cfg.SendRateLimitPerMin,
 	)
 	apiKeySvc := service.NewAPIKeyService(apiKeyDAO, auditLogger, 10)
-	adminSvc := service.NewAdminService(userDAO, settingsDAO, auditLogger, cfg.Domain)
+	adminSvc := service.NewAdminService(userDAO, settingsDAO, msgDAO, auditLogger, cfg.Domain)
 	ruleSvc := service.NewRuleService(ruleDAO)
 
 	// 6. 附件存储

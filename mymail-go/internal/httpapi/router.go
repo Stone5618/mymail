@@ -31,6 +31,7 @@ type Deps struct {
 	AuthService *service.AuthService
 	MailService *service.MailService
 	AttachStore *attachment.Store
+	AvatarPath  string
 
 	// 阶段 5 新增（nil 表示不注册对应路由组）
 	APIKeyService *service.APIKeyService // /api/auth/api-keys + /api/v1/send
@@ -70,6 +71,11 @@ func NewRouter(deps Deps) *gin.Engine {
 	// 版本信息端点（公开，无需认证）
 	versionH := handler.NewVersionHandler(deps.Cfg.Version, deps.Cfg.BuildTime, deps.Cfg.CommitSHA)
 	r.GET("/api/version", versionH.GetVersion)
+
+	// 头像静态文件服务（公开访问，便于邮件中加载头像）
+	if deps.AvatarPath != "" {
+		r.Static("/api/avatars", deps.AvatarPath)
+	}
 
 	// ===== 业务端点 =====
 	registerAuthRoutes(r, deps)
@@ -178,6 +184,7 @@ func registerAuthRoutes(r *gin.Engine, deps Deps) {
 			secured.PUT("/profile", authH.UpdateProfile)
 			secured.PUT("/password", authH.ChangePassword)
 			secured.POST("/change-default-password", authH.ChangeDefaultPassword)
+			secured.POST("/avatar", authH.UploadAvatar)
 		}
 	}
 }

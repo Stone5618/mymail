@@ -69,6 +69,9 @@ export const updateProfile = (data) =>
 export const changePassword = (currentPw, newPw) =>
   request('/auth/password', { method: 'PUT', body: { currentPassword: currentPw, newPassword: newPw } })
 
+export const uploadAvatar = (formData) =>
+  request('/auth/avatar', { method: 'POST', body: formData })
+
 // Mail
 export const getMailList = (params = {}) => {
   // 过滤掉 undefined/null 值，避免 URLSearchParams 将其转为 "undefined" 字符串

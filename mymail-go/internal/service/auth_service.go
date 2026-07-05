@@ -6,11 +6,19 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	pngpkg "image/png"
+	"io"
 	"log/slog"
 	"math"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -72,16 +80,20 @@ type AuthService struct {
 	audit       *audit.Logger
 	domain      string
 	maildirPath string
+	avatarPath  string
+	maxAvatarSize int64
 }
 
 // NewAuthService 创建认证服务。
-func NewAuthService(userDAO *dao.UserDAO, jwtMgr *crypto.JWTManager, auditLogger *audit.Logger, domain, maildirPath string) *AuthService {
+func NewAuthService(userDAO *dao.UserDAO, jwtMgr *crypto.JWTManager, auditLogger *audit.Logger, domain, maildirPath, avatarPath string) *AuthService {
 	return &AuthService{
-		userDAO:     userDAO,
-		jwt:         jwtMgr,
-		audit:       auditLogger,
-		domain:      domain,
-		maildirPath: maildirPath,
+		userDAO:       userDAO,
+		jwt:           jwtMgr,
+		audit:         auditLogger,
+		domain:        domain,
+		maildirPath:   maildirPath,
+		avatarPath:    avatarPath,
+		maxAvatarSize: 2 << 20, // 2MB 默认上限
 	}
 }
 
@@ -413,6 +425,109 @@ func (s *AuthService) ChangeDefaultPassword(ctx context.Context, user *dao.User,
 	}
 	slog.Info("用户强制改密", "user_id", user.ID)
 	return nil
+}
+
+// SetMaxAvatarSize 设置头像大小上限（字节），供配置注入。
+func (s *AuthService) SetMaxAvatarSize(size int64) {
+	if size > 0 {
+		s.maxAvatarSize = size
+	}
+}
+
+// UploadAvatar 上传用户头像。
+// 校验格式（JPEG/PNG/GIF/WebP）与大小，解码后统一保存为 PNG，并更新用户 avatar_url。
+func (s *AuthService) UploadAvatar(ctx context.Context, userID int64, fileHeader *multipart.FileHeader) (string, error) {
+	if s.avatarPath == "" {
+		return "", NewAuthError(http.StatusInternalServerError, "头像存储未配置")
+	}
+	if fileHeader == nil {
+		return "", NewAuthError(http.StatusBadRequest, "未选择头像文件")
+	}
+	if fileHeader.Size > s.maxAvatarSize {
+		return "", NewAuthError(http.StatusBadRequest, fmt.Sprintf("头像大小不能超过 %d MB", s.maxAvatarSize>>20))
+	}
+
+	// 读取文件内容
+	file, err := fileHeader.Open()
+	if err != nil {
+		return "", NewAuthError(http.StatusBadRequest, "读取头像失败")
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, s.maxAvatarSize+1))
+	if err != nil {
+		return "", NewAuthError(http.StatusBadRequest, "读取头像失败")
+	}
+	if int64(len(data)) > s.maxAvatarSize {
+		return "", NewAuthError(http.StatusBadRequest, "头像过大")
+	}
+
+	// MIME 类型校验
+	contentType := fileHeader.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = http.DetectContentType(data)
+	}
+	allowed := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/gif":  true,
+		"image/webp": true,
+	}
+	if !allowed[contentType] {
+		return "", NewAuthError(http.StatusBadRequest, "仅支持 JPG/PNG/GIF/WebP 格式")
+	}
+
+	// 图片解码校验（防止伪造扩展名上传非图片文件）
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return "", NewAuthError(http.StatusBadRequest, "无效的图片文件")
+	}
+
+	// 创建目录并保存为 PNG
+	if err := os.MkdirAll(s.avatarPath, 0755); err != nil {
+		return "", fmt.Errorf("创建头像目录失败: %w", err)
+	}
+	filename := fmt.Sprintf("avatar_%d.png", userID)
+	path := filepath.Join(s.avatarPath, filename)
+	out, err := os.Create(path)
+	if err != nil {
+		return "", fmt.Errorf("创建头像文件失败: %w", err)
+	}
+	defer out.Close()
+	if err := pngpkg.Encode(out, img); err != nil {
+		return "", fmt.Errorf("编码头像失败: %w", err)
+	}
+	if err := os.Chown(path, 1000, 1000); err != nil {
+		slog.Warn("设置头像文件所有者失败", "path", path, "error", err)
+	}
+
+	avatarURL := fmt.Sprintf("/api/avatars/%s", filename)
+	if err := s.userDAO.UpdateProfile(ctx, userID, dao.UpdateProfileInput{AvatarURL: &avatarURL}); err != nil {
+		return "", fmt.Errorf("更新头像记录失败: %w", err)
+	}
+
+	if s.audit != nil {
+		s.audit.Record(ctx, audit.Entry{
+			ActorType:    audit.ActorUser,
+			ActorID:      &userID,
+			Action:       "auth.upload_avatar",
+			ResourceType: "user",
+			ResourceID:   fmt.Sprintf("%d", userID),
+			Result:       audit.ResultSuccess,
+		})
+	}
+	slog.Info("用户上传头像", "user_id", userID, "size", len(data))
+	return avatarURL, nil
+}
+
+// GravatarURL 根据邮箱返回 Gravatar 头像 URL（使用国内 cravatar.cn 镜像）。
+func GravatarURL(email string, size int) string {
+	email = strings.ToLower(strings.TrimSpace(email))
+	hash := fmt.Sprintf("%x", md5.Sum([]byte(email)))
+	if size <= 0 {
+		size = 128
+	}
+	return fmt.Sprintf("https://cravatar.cn/avatar/%s?s=%d&d=mp", hash, size)
 }
 
 // recordFailedLogin 记录登录失败审计。

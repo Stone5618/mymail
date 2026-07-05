@@ -15,7 +15,7 @@
       <div class="hidden md:flex flex-col justify-center items-center p-12 bg-gradient-to-br from-primary-600 to-violet-600 w-1/2 relative overflow-hidden">
         <div class="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.1),transparent_70%)]" />
         <div class="relative mb-6 drop-shadow-lg">
-          <BaseIcon name="envelope" class="h-16 w-16 text-white" />
+          <LogoIcon :size="64" class="text-white" />
         </div>
         <h1 class="relative text-3xl font-bold text-white mb-2">MyMail</h1>
         <p class="relative text-white/70 text-center text-sm">安全、高效的邮件管理</p>
@@ -30,7 +30,7 @@
       <div class="w-full md:w-1/2 p-6 sm:p-8 flex flex-col justify-center">
         <!-- 移动端 logo -->
         <div class="md:hidden flex items-center gap-2 mb-6">
-          <BaseIcon name="envelope" class="h-8 w-8 text-primary-400" />
+          <LogoIcon :size="32" class="text-primary-400" />
           <span class="text-xl font-bold text-dark-100">MyMail</span>
         </div>
 
@@ -108,6 +108,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import * as api from '@/api'
 import BaseIcon from '@/components/BaseIcon.vue'
+import LogoIcon from '@/components/LogoIcon.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
