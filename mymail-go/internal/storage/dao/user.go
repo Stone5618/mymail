@@ -19,6 +19,7 @@ type User struct {
 	Username          string
 	Email             string
 	PasswordHash      string
+	DovecotPasswordHash string
 	DisplayName       string // 可空，但 Scan 时若 NULL 则保持空字符串
 	Role              string
 	StorageLimit      int64
@@ -33,7 +34,7 @@ type User struct {
 }
 
 // userColumns 是 users 表的所有列（顺序须与 scanUser 一致）。
-const userColumns = `id, username, email, password_hash, display_name, role,
+const userColumns = `id, username, email, password_hash, dovecot_password_hash, display_name, role,
 	storage_limit, storage_used, is_active, login_fails, locked_until,
 	is_default_password, signature, created_at, updated_at`
 
@@ -46,7 +47,7 @@ func scanUser(s interface {
 	var isActive int
 	var isDefault int
 	err := s.Scan(
-		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &displayName, &u.Role,
+		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DovecotPasswordHash, &displayName, &u.Role,
 		&u.StorageLimit, &u.StorageUsed, &isActive, &u.LoginFails, &u.LockedUntil,
 		&isDefault, &u.Signature, &u.CreatedAt, &u.UpdatedAt,
 	)
@@ -116,6 +117,7 @@ type CreateUserInput struct {
 	Username     string
 	Email        string
 	PasswordHash string
+	DovecotPasswordHash string
 	DisplayName  string // 空则用 username
 	Role         string // 空则 "user"
 	StorageLimit int64  // 0 表示使用默认值 100MB（P1-14 修复：管理员创建用户直接设置配额）
@@ -137,9 +139,9 @@ func (d *UserDAO) Create(ctx context.Context, in CreateUserInput) (int64, error)
 	if in.StorageLimit == 0 {
 		in.StorageLimit = DefaultStorageLimit
 	}
-	const q = `INSERT INTO users (username, email, password_hash, display_name, role, storage_limit)
-		VALUES (?, ?, ?, ?, ?, ?)`
-	res, err := d.db.ExecContext(ctx, q, in.Username, in.Email, in.PasswordHash, in.DisplayName, in.Role, in.StorageLimit)
+	const q = `INSERT INTO users (username, email, password_hash, dovecot_password_hash, display_name, role, storage_limit)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`
+	res, err := d.db.ExecContext(ctx, q, in.Username, in.Email, in.PasswordHash, in.DovecotPasswordHash, in.DisplayName, in.Role, in.StorageLimit)
 	if err != nil {
 		return 0, fmt.Errorf("创建用户失败: %w", err)
 	}
@@ -234,9 +236,10 @@ func (d *UserDAO) UpdateProfile(ctx context.Context, userID int64, in UpdateProf
 }
 
 // UpdatePassword 更新密码哈希。
-func (d *UserDAO) UpdatePassword(ctx context.Context, userID int64, passwordHash string) error {
-	const q = `UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-	_, err := d.db.ExecContext(ctx, q, passwordHash, userID)
+// UpdatePasswordAndDovecot 同时更新 bcrypt 和 dovecot 密码哈希。
+func (d *UserDAO) UpdatePasswordAndDovecot(ctx context.Context, userID int64, passwordHash string, dovecotHash string) error {
+	const q = `UPDATE users SET password_hash = ?, dovecot_password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+	_, err := d.db.ExecContext(ctx, q, passwordHash, dovecotHash, userID)
 	if err != nil {
 		return fmt.Errorf("更新 password 失败: %w", err)
 	}

@@ -30,3 +30,12 @@ func HashPassword(password string) (string, error) {
 func ComparePassword(hashedPassword, password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 }
+
+// HashDovecotPassword 生成 Dovecot 兼容的 BLF-CRYPT 哈希。
+//
+// Dovecot 2.3+ 的 BLF-CRYPT 实现原生支持 $2a$ / $2b$ / $2y$ 三种 bcrypt 前缀
+//（参见 Dovecot Password Schemes 文档）。Go 的 golang.org/x/crypto/bcrypt 生成
+// 的 $2a$ 前缀哈希可直接用于 Dovecot IMAP 认证，无需额外调用 doveadm。
+func HashDovecotPassword(password string) (string, error) {
+	return HashPassword(password)
+}

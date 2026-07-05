@@ -285,12 +285,15 @@ func TestUserDAO_UpdatePassword(t *testing.T) {
 	ctx := context.Background()
 
 	id, _ := dao.Create(ctx, CreateUserInput{Username: "u", Email: "u@x.com", PasswordHash: "oldhash"})
-	if err := dao.UpdatePassword(ctx, id, "newhash"); err != nil {
-		t.Fatalf("UpdatePassword 失败: %v", err)
+	if err := dao.UpdatePasswordAndDovecot(ctx, id, "newhash", "newdovecot"); err != nil {
+		t.Fatalf("UpdatePasswordAndDovecot 失败: %v", err)
 	}
 	u, _ := dao.FindByID(ctx, id)
 	if u.PasswordHash != "newhash" {
 		t.Errorf("PasswordHash 期望 newhash，实际 %q", u.PasswordHash)
+	}
+	if u.DovecotPasswordHash != "newdovecot" {
+		t.Errorf("DovecotPasswordHash 期望 newdovecot，实际 %q", u.DovecotPasswordHash)
 	}
 }
 

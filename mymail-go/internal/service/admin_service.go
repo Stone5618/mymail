@@ -90,20 +90,27 @@ func (s *AdminService) GetUser(ctx context.Context, id int64) (*dao.User, error)
 // CreateUser 管理员创建用户。
 // P1-14 修复：直接在 CreateUserInput 中设置 storage_limit，无需后续更新。
 func (s *AdminService) CreateUser(ctx context.Context, in CreateUserAdminInput) (*dao.User, error) {
-	// 密码哈希
+	// 密码哈希（Go bcrypt）
 	hash, err := crypto.HashPassword(in.Password)
 	if err != nil {
 		return nil, fmt.Errorf("密码哈希失败: %w", err)
 	}
 
+	// Dovecot 兼容哈希（IMAP 认证用）
+	dovecotHash, err := crypto.HashDovecotPassword(in.Password)
+	if err != nil {
+		return nil, fmt.Errorf("生成 Dovecot 哈希失败: %w", err)
+	}
+
 	// 创建用户（StorageLimit=0 时由 DAO 默认 100MB）
 	id, err := s.userDAO.Create(ctx, dao.CreateUserInput{
-		Username:     in.Username,
-		Email:        in.Email,
-		PasswordHash: hash,
-		DisplayName:  in.DisplayName,
-		Role:         in.Role,
-		StorageLimit: in.StorageLimit,
+		Username:            in.Username,
+		Email:               in.Email,
+		PasswordHash:        hash,
+		DovecotPasswordHash: dovecotHash,
+		DisplayName:         in.DisplayName,
+		Role:                in.Role,
+		StorageLimit:        in.StorageLimit,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("创建用户失败: %w", err)
@@ -164,7 +171,11 @@ func (s *AdminService) UpdateUser(ctx context.Context, id int64, in UpdateUserAd
 		if err != nil {
 			return fmt.Errorf("密码哈希失败: %w", err)
 		}
-		if err := s.userDAO.UpdatePassword(ctx, id, hash); err != nil {
+		dovecotHash, err := crypto.HashDovecotPassword(*in.Password)
+		if err != nil {
+			return fmt.Errorf("生成 Dovecot 哈希失败: %w", err)
+		}
+		if err := s.userDAO.UpdatePasswordAndDovecot(ctx, id, hash, dovecotHash); err != nil {
 			return fmt.Errorf("更新 password 失败: %w", err)
 		}
 	}

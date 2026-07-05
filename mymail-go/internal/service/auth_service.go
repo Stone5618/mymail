@@ -140,10 +140,14 @@ func (s *AuthService) Register(ctx context.Context, username, password, displayN
 		return nil, ErrEmailExists
 	}
 
-	// 7. 密码哈希
+	// 7. 密码哈希（Web 登录用 bcrypt，IMAP 用 Dovecot 兼容的 bcrypt）
 	hash, err := crypto.HashPassword(password)
 	if err != nil {
 		return nil, fmt.Errorf("密码哈希失败: %w", err)
+	}
+	dovecotHash, err := crypto.HashDovecotPassword(password)
+	if err != nil {
+		return nil, fmt.Errorf("生成 Dovecot 哈希失败: %w", err)
 	}
 
 	// 8. 首个用户自动 admin
@@ -158,11 +162,12 @@ func (s *AuthService) Register(ctx context.Context, username, password, displayN
 
 	// 9. 创建用户
 	userID, err := s.userDAO.Create(ctx, dao.CreateUserInput{
-		Username:     username,
-		Email:        email,
-		PasswordHash: hash,
-		DisplayName:  displayName,
-		Role:         role,
+		Username:            username,
+		Email:               email,
+		PasswordHash:        hash,
+		DovecotPasswordHash: dovecotHash,
+		DisplayName:         displayName,
+		Role:                role,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("创建用户失败: %w", err)
@@ -331,7 +336,7 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID int64, displayNa
 }
 
 // ChangePassword 修改密码（需校验当前密码）。
-// 注意：与原 Node.js 一致，此接口不清除 is_default_password 标志。
+// 若用户此前是默认密码，修改成功后自动清除 is_default_password 标志。
 func (s *AuthService) ChangePassword(ctx context.Context, user *dao.User, currentPassword, newPassword string) error {
 	if currentPassword == "" || newPassword == "" {
 		return ErrCurrentNewRequired
@@ -346,8 +351,18 @@ func (s *AuthService) ChangePassword(ctx context.Context, user *dao.User, curren
 	if err != nil {
 		return fmt.Errorf("密码哈希失败: %w", err)
 	}
-	if err := s.userDAO.UpdatePassword(ctx, user.ID, hash); err != nil {
+	dovecotHash, err := crypto.HashDovecotPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("生成 Dovecot 哈希失败: %w", err)
+	}
+	if err := s.userDAO.UpdatePasswordAndDovecot(ctx, user.ID, hash, dovecotHash); err != nil {
 		return fmt.Errorf("更新密码失败: %w", err)
+	}
+	// 若此前是默认密码，修改成功后清除标志
+	if user.IsDefaultPassword {
+		if err := s.userDAO.SetDefaultPassword(ctx, user.ID, false); err != nil {
+			return fmt.Errorf("清除默认密码标志失败: %w", err)
+		}
 	}
 	if s.audit != nil {
 		s.audit.Record(ctx, audit.Entry{
@@ -375,7 +390,11 @@ func (s *AuthService) ChangeDefaultPassword(ctx context.Context, user *dao.User,
 	if err != nil {
 		return fmt.Errorf("密码哈希失败: %w", err)
 	}
-	if err := s.userDAO.UpdatePassword(ctx, user.ID, hash); err != nil {
+	dovecotHash, err := crypto.HashDovecotPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("生成 Dovecot 哈希失败: %w", err)
+	}
+	if err := s.userDAO.UpdatePasswordAndDovecot(ctx, user.ID, hash, dovecotHash); err != nil {
 		return fmt.Errorf("更新密码失败: %w", err)
 	}
 	if err := s.userDAO.SetDefaultPassword(ctx, user.ID, false); err != nil {
