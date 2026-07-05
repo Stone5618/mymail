@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-[#020617] relative overflow-hidden">
+  <div class="min-h-screen flex items-center justify-center relative overflow-hidden" style="background-color: var(--c-body-bg)">
     <!-- 动态星空背景 -->
     <div class="absolute inset-0 overflow-hidden">
       <div class="absolute inset-0 bg-gradient-to-br from-primary-600/8 via-transparent to-violet-600/5" />
@@ -14,7 +14,9 @@
       <!-- 左侧品牌 -->
       <div class="hidden md:flex flex-col justify-center items-center p-12 bg-gradient-to-br from-primary-600 to-violet-600 w-1/2 relative overflow-hidden">
         <div class="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.1),transparent_70%)]" />
-        <div class="relative text-6xl mb-6 drop-shadow-lg">📧</div>
+        <div class="relative mb-6 drop-shadow-lg">
+          <BaseIcon name="envelope" class="h-16 w-16 text-white" />
+        </div>
         <h1 class="relative text-3xl font-bold text-white mb-2">MyMail</h1>
         <p class="relative text-white/70 text-center text-sm">安全、高效的邮件管理</p>
         <div class="relative mt-8 flex gap-2 text-white/50 text-xs">
@@ -28,7 +30,7 @@
       <div class="w-full md:w-1/2 p-6 sm:p-8 flex flex-col justify-center">
         <!-- 移动端 logo -->
         <div class="md:hidden flex items-center gap-2 mb-6">
-          <span class="text-3xl">📧</span>
+          <BaseIcon name="envelope" class="h-8 w-8 text-primary-400" />
           <span class="text-xl font-bold text-dark-100">MyMail</span>
         </div>
 
@@ -39,7 +41,7 @@
 
         <!-- 错误提示 -->
         <div v-if="error" class="mb-4 rounded-lg bg-red-500/10 border border-red-500/30 px-4 py-3 text-red-400 text-sm flex items-start gap-2">
-          <span>⚠️</span>
+          <BaseIcon name="exclamation-triangle" class="h-5 w-5 shrink-0 mt-0.5" />
           <span>{{ error }}</span>
         </div>
 
@@ -50,16 +52,16 @@
           </div>
           <div class="relative">
             <input :type="showPw ? 'text' : 'password'" v-model="loginForm.password" placeholder="密码" class="input-field pr-10" required />
-            <button type="button" @click="showPw = !showPw" class="absolute right-3 top-1/2 -translate-y-1/2 text-dark-500 hover:text-dark-300 transition-colors">
-              {{ showPw ? '🙈' : '👁️' }}
+            <button type="button" @click="showPw = !showPw" class="absolute right-3 top-1/2 -translate-y-1/2 text-dark-500 hover:text-dark-300 transition-colors" :aria-label="showPw ? '隐藏密码' : '显示密码'">
+              <BaseIcon :name="showPw ? 'eye-slash' : 'eye'" class="h-5 w-5" />
             </button>
           </div>
           <label class="flex items-center gap-2 text-sm text-dark-400 cursor-pointer">
             <input type="checkbox" v-model="loginForm.remember" class="rounded border-dark-600 bg-dark-800" />
             记住我（30天）
           </label>
-          <button type="submit" class="btn-primary w-full" :disabled="loading">
-            <span v-if="loading" class="inline-block animate-spin mr-1">⏳</span>
+          <button type="submit" class="btn-primary w-full flex items-center justify-center gap-2" :disabled="loading">
+            <BaseIcon v-if="loading" name="arrow-path" class="h-5 w-5 animate-spin" />
             {{ loading ? '登录中...' : '登录' }}
           </button>
         </form>
@@ -84,8 +86,8 @@
             <span :class="{ 'text-emerald-400': /[^a-zA-Z0-9]/.test(registerForm.password) }">符号</span>
           </div>
           <input :type="showPw ? 'text' : 'password'" v-model="registerForm.password2" placeholder="确认密码" class="input-field" required />
-          <button type="submit" class="btn-primary w-full" :disabled="loading">
-            <span v-if="loading" class="inline-block animate-spin mr-1">⏳</span>
+          <button type="submit" class="btn-primary w-full flex items-center justify-center gap-2" :disabled="loading">
+            <BaseIcon v-if="loading" name="arrow-path" class="h-5 w-5 animate-spin" />
             {{ loading ? '注册中...' : '注册' }}
           </button>
         </form>
@@ -105,6 +107,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import * as api from '@/api'
+import BaseIcon from '@/components/BaseIcon.vue'
 
 const auth = useAuthStore()
 const router = useRouter()

@@ -1,11 +1,41 @@
 <template>
   <div class="flex-1 flex flex-col min-h-0">
     <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-dark-800">
-      <h2 class="text-lg sm:text-xl font-semibold text-dark-100">⚙️ 设置</h2>
-      <button @click="router.push('/inbox')" class="btn-ghost text-sm">← 返回</button>
+      <h2 class="text-lg sm:text-xl font-semibold text-dark-100 flex items-center gap-2">
+        <BaseIcon name="cog-6-tooth" class="h-5 w-5 text-primary-400" />
+        <span>设置</span>
+      </h2>
+      <button @click="router.push('/inbox')" class="btn-ghost text-sm flex items-center gap-1">
+        <BaseIcon name="arrow-left" class="h-4 w-4" />
+        <span>返回</span>
+      </button>
     </div>
     <div class="flex-1 overflow-y-auto p-4 sm:p-6">
       <div class="max-w-2xl mx-auto space-y-6">
+
+        <!-- 外观 -->
+        <div class="card p-4 sm:p-6">
+          <h3 class="text-base sm:text-lg font-medium text-dark-100 mb-4 flex items-center gap-2">
+            <BaseIcon name="swatch" class="h-4 w-4 text-primary-400" />
+            <span>外观</span>
+          </h3>
+          <div class="space-y-3">
+            <label class="block text-sm text-dark-400">主题</label>
+            <div class="grid grid-cols-3 gap-2">
+              <button
+                v-for="opt in themeOptions" :key="opt.value"
+                @click="setTheme(opt.value)"
+                class="rounded-lg border p-3 text-center transition-all"
+                :class="theme.mode === opt.value
+                  ? 'border-primary-500 bg-primary-600/10 text-primary-400'
+                  : 'border-dark-700 text-dark-400 hover:border-dark-600'"
+              >
+                <BaseIcon :name="opt.icon" class="h-5 w-5 mx-auto mb-1.5" />
+                <span class="text-xs font-medium">{{ opt.label }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
 
         <!-- 个人信息 -->
         <div class="card p-4 sm:p-6">
@@ -67,12 +97,17 @@
 import { ref, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
+import { useUserPreferencesStore } from '@/stores/userPreferences'
 import { updateProfile, changePassword } from '@/api'
 import { useToast } from '@/composables/useToast'
+import BaseIcon from '@/components/BaseIcon.vue'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const theme = useThemeStore()
+const userPrefs = useUserPreferencesStore()
 const { toast } = useToast()
 
 const displayName = ref('')
@@ -80,6 +115,18 @@ const signature = ref('')
 const oldPw = ref('')
 const newPw = ref('')
 const newPw2 = ref('')
+
+const themeOptions = [
+  { value: 'dark', label: '深色', icon: 'moon' },
+  { value: 'light', label: '浅色', icon: 'sun' },
+  { value: 'system', label: '跟随系统', icon: 'computer-desktop' },
+]
+
+async function setTheme(value) {
+  theme.setMode(value)
+  // 同步到后端
+  await userPrefs.set('theme', value)
+}
 
 onMounted(async () => {
   if (auth.user) {

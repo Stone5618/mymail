@@ -15,6 +15,7 @@ const routes = [
       { path: 'mail/:id', name: 'mail-detail', component: () => import('@/views/MailDetailView.vue'), props: true },
       { path: 'compose', name: 'compose', component: () => import('@/views/ComposeView.vue') },
       { path: 'settings', name: 'settings', component: () => import('@/views/SettingsView.vue') },
+      { path: 'about', name: 'about', component: () => import('@/views/AboutView.vue') },
       // P0-5：admin 路由加 meta.requiresAdmin 守卫
       { path: 'admin', name: 'admin', component: () => import('@/views/AdminView.vue'), meta: { requiresAdmin: true } },
     ],

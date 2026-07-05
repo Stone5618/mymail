@@ -314,10 +314,11 @@ func (s *AuthService) Login(ctx context.Context, email, password string, remembe
 }
 
 // UpdateProfile 更新个人资料。
-func (s *AuthService) UpdateProfile(ctx context.Context, userID int64, displayName, signature *string) error {
+func (s *AuthService) UpdateProfile(ctx context.Context, userID int64, displayName, signature, preferences *string) error {
 	in := dao.UpdateProfileInput{
 		DisplayName: displayName,
 		Signature:   signature,
+		Preferences: preferences,
 	}
 	if err := s.userDAO.UpdateProfile(ctx, userID, in); err != nil {
 		return fmt.Errorf("更新资料失败: %w", err)

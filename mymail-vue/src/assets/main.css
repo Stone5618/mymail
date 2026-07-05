@@ -1,16 +1,46 @@
 @import "tailwindcss";
 
-/* ===== MyMail Dark Theme ===== */
+/* ===== 语义化 CSS 变量（深色模式默认） ===== */
+:root {
+  --c-body-bg: #020617;
+  --c-bg-base: #0f172a;       /* dark-900: 侧边栏、卡片背景 */
+  --c-bg-elevated: #1e293b;   /* dark-800: hover、输入框 */
+  --c-bg-hover: #334155;      /* dark-700: hover 加深 */
+  --c-border: #334155;        /* dark-700: 边框 */
+  --c-border-subtle: #475569; /* dark-600: 次要边框 */
+  --c-text-muted: #64748b;    /* dark-500: 次要文字 */
+  --c-text-secondary: #94a3b8;/* dark-400: 辅助文字 */
+  --c-text-primary: #cbd5e1;  /* dark-300: 次要文字亮 */
+  --c-text-heading: #e2e8f0;  /* dark-200: 主文字 */
+  --c-text-title: #f1f5f9;    /* dark-100: 标题文字 */
+}
+
+/* ===== 浅色模式覆盖 ===== */
+[data-theme="light"] {
+  --c-body-bg: #f8fafc;
+  --c-bg-base: #ffffff;
+  --c-bg-elevated: #f1f5f9;
+  --c-bg-hover: #e2e8f0;
+  --c-border: #e2e8f0;
+  --c-border-subtle: #cbd5e1;
+  --c-text-muted: #94a3b8;
+  --c-text-secondary: #64748b;
+  --c-text-primary: #475569;
+  --c-text-heading: #334155;
+  --c-text-title: #0f172a;
+}
+
+/* ===== Tailwind 主题 token（引用语义变量，实现运行时切换） ===== */
 @theme {
-  --color-dark-900: #0f172a;
-  --color-dark-800: #1e293b;
-  --color-dark-700: #334155;
-  --color-dark-600: #475569;
-  --color-dark-500: #64748b;
-  --color-dark-400: #94a3b8;
-  --color-dark-300: #cbd5e1;
-  --color-dark-200: #e2e8f0;
-  --color-dark-100: #f1f5f9;
+  --color-dark-900: var(--c-bg-base);
+  --color-dark-800: var(--c-bg-elevated);
+  --color-dark-700: var(--c-border);
+  --color-dark-600: var(--c-border-subtle);
+  --color-dark-500: var(--c-text-muted);
+  --color-dark-400: var(--c-text-secondary);
+  --color-dark-300: var(--c-text-primary);
+  --color-dark-200: var(--c-text-heading);
+  --color-dark-100: var(--c-text-title);
 
   --color-primary-600: #4f46e5;
   --color-primary-500: #6366f1;
@@ -20,64 +50,139 @@
 
 /* ===== Base ===== */
 body {
-  @apply bg-[#020617] text-dark-200 font-sans antialiased;
+  background-color: var(--c-body-bg);
+  color: var(--c-text-heading);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ===== Scrollbar ===== */
-::-webkit-scrollbar { @apply w-2; }
-::-webkit-scrollbar-track { @apply bg-dark-900; }
-::-webkit-scrollbar-thumb { @apply bg-dark-700 rounded-full; }
-::-webkit-scrollbar-thumb:hover { @apply bg-dark-600; }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--c-bg-base); }
+::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-border-subtle); }
 
 /* ===== Components ===== */
 .card {
-  @apply rounded-xl border border-dark-800 bg-dark-900/50;
+  border-radius: 0.75rem;
+  border: 1px solid var(--c-bg-hover);
+  background-color: color-mix(in srgb, var(--c-bg-base) 50%, transparent);
 }
 
 .sidebar-item {
-  @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-dark-400
-         transition-all duration-200 hover:bg-dark-800 hover:text-dark-200;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--c-text-muted);
+  transition: all 0.2s;
+}
+.sidebar-item:hover {
+  background-color: var(--c-bg-elevated);
+  color: var(--c-text-heading);
 }
 .sidebar-item.active {
-  @apply bg-dark-800 text-primary-400 font-medium;
+  background-color: var(--c-bg-elevated);
+  color: var(--color-primary-400);
+  font-weight: 500;
 }
 
 .btn-primary {
-  @apply rounded-lg bg-primary-600 px-4 py-2 font-medium text-white
-         transition-all duration-200 hover:bg-primary-500 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50;
+  border-radius: 0.5rem;
+  background-color: var(--color-primary-600);
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  color: #fff;
+  transition: all 0.2s;
 }
+.btn-primary:hover { background-color: var(--color-primary-500); }
+.btn-primary:active { transform: scale(0.95); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-secondary {
-  @apply rounded-lg border border-dark-700 bg-dark-800 px-4 py-2 font-medium text-dark-200
-         transition-all duration-200 hover:bg-dark-700 active:scale-95;
+  border-radius: 0.5rem;
+  border: 1px solid var(--c-border);
+  background-color: var(--c-bg-elevated);
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  color: var(--c-text-heading);
+  transition: all 0.2s;
 }
+.btn-secondary:hover { background-color: var(--c-bg-hover); }
+.btn-secondary:active { transform: scale(0.95); }
 
 .btn-danger {
-  @apply rounded-lg border border-red-500/30 bg-red-500/20 px-4 py-2 font-medium text-red-400
-         transition-all duration-200 hover:bg-red-500/30;
+  border-radius: 0.5rem;
+  border: 1px solid color-mix(in srgb, #ef4444 30%, transparent);
+  background-color: color-mix(in srgb, #ef4444 20%, transparent);
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  color: #f87171;
+  transition: all 0.2s;
 }
+.btn-danger:hover { background-color: color-mix(in srgb, #ef4444 30%, transparent); }
 
 .btn-ghost {
-  @apply rounded-lg px-3 py-2 text-dark-400 transition-all duration-200
-         hover:bg-dark-800 hover:text-dark-200;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--c-text-muted);
+  transition: all 0.2s;
+}
+.btn-ghost:hover {
+  background-color: var(--c-bg-elevated);
+  color: var(--c-text-heading);
 }
 
 .input-field {
-  @apply w-full rounded-lg border border-dark-700 bg-dark-900 px-4 py-2.5 text-dark-100
-         transition-all duration-200 placeholder:text-dark-500 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--c-border);
+  background-color: var(--c-bg-base);
+  padding: 0.625rem 1rem;
+  color: var(--c-text-title);
+  transition: all 0.2s;
+}
+.input-field::placeholder { color: var(--c-text-muted); }
+.input-field:focus {
+  border-color: var(--color-primary-500);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary-500) 50%, transparent);
 }
 
 /* ===== Transitions ===== */
-.page-enter-active { @apply transition-all duration-200 ease-out; }
-.page-leave-active { @apply transition-all duration-150 ease-in; }
-.page-enter-from { @apply opacity-0 translate-y-2; }
-.page-leave-to { @apply opacity-0 -translate-y-1; }
+.page-enter-active { transition: all 0.2s ease-out; }
+.page-leave-active { transition: all 0.15s ease-in; }
+.page-enter-from { opacity: 0; transform: translateY(0.5rem); }
+.page-leave-to { opacity: 0; transform: translateY(-0.25rem); }
 
-.fade-enter-active { @apply transition-opacity duration-200; }
-.fade-leave-active { @apply transition-opacity duration-150; }
-.fade-enter-from, .fade-leave-to { @apply opacity-0; }
+.fade-enter-active { transition: opacity 0.2s; }
+.fade-leave-active { transition: opacity 0.15s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 
-.slide-enter-active { @apply transition-all duration-300 ease-out; }
-.slide-leave-active { @apply transition-all duration-200 ease-in; }
-.slide-enter-from { @apply opacity-0 -translate-x-2; }
-.slide-leave-to { @apply opacity-0 translate-x-2; }
+.slide-enter-active { transition: all 0.3s ease-out; }
+.slide-leave-active { transition: all 0.2s ease-in; }
+.slide-enter-from { opacity: 0; transform: translateX(-0.5rem); }
+.slide-leave-to { opacity: 0; transform: translateX(0.5rem); }
+
+/* ===== Quill 浅色/深色适配 ===== */
+[data-theme="light"] .ql-toolbar {
+  background-color: var(--c-bg-elevated) !important;
+  border-color: var(--c-border) !important;
+}
+[data-theme="light"] .ql-container {
+  border-color: var(--c-border) !important;
+}
+[data-theme="light"] .ql-editor {
+  color: var(--c-text-title) !important;
+}
+[data-theme="light"] .ql-snow .ql-stroke {
+  stroke: var(--c-text-secondary) !important;
+}
+[data-theme="light"] .ql-snow .ql-fill {
+  fill: var(--c-text-secondary) !important;
+}
+[data-theme="light"] .ql-snow .ql-picker-label {
+  color: var(--c-text-secondary) !important;
+}

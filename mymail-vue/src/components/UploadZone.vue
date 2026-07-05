@@ -24,7 +24,11 @@
         @change="onFileSelect"
       />
       <div class="flex flex-col items-center gap-1.5">
-        <span class="text-3xl" :class="{ 'text-xl': files.length > 0 }">{{ isDragging ? '📥' : '📎' }}</span>
+        <BaseIcon
+          :name="isDragging ? 'arrow-down-tray' : 'paper-clip'"
+          :class="files.length > 0 ? 'h-5 w-5' : 'h-8 w-8'"
+          class="text-dark-400"
+        />
         <span class="text-sm text-dark-300">
           {{ isDragging ? '松开即可上传' : '拖拽文件到这里，或点击选择' }}
         </span>
@@ -47,7 +51,7 @@
             class="w-full h-full object-cover"
             @error="f.previewUrl = null"
           />
-          <span v-else class="text-xl">{{ getFileIcon(f.mimeType || f.type) }}</span>
+          <BaseIcon v-else :name="getFileIcon(f.mimeType || f.type)" class="h-5 w-5 text-dark-400" />
         </div>
 
         <!-- Info -->
@@ -55,9 +59,18 @@
           <div class="text-sm text-dark-200 truncate" :title="f.name">{{ f.name }}</div>
           <div class="flex items-center gap-2 text-xs text-dark-400 mt-0.5">
             <span>{{ formatSize(f.size) }}</span>
-            <span v-if="f.status === 'uploading'" class="text-amber-400 animate-pulse">⏳ 上传中...</span>
-            <span v-else-if="f.status === 'done'" class="text-green-400">✓</span>
-            <span v-else-if="f.status === 'error'" class="text-red-400">✗ {{ f.error || '失败' }}</span>
+            <span v-if="f.status === 'uploading'" class="text-amber-400 flex items-center gap-1">
+              <BaseIcon name="arrow-path" class="h-3 w-3 animate-spin" />
+              <span>上传中...</span>
+            </span>
+            <span v-else-if="f.status === 'done'" class="text-green-400 flex items-center gap-1">
+              <BaseIcon name="check" class="h-3 w-3" />
+              <span>完成</span>
+            </span>
+            <span v-else-if="f.status === 'error'" class="text-red-400 flex items-center gap-1">
+              <BaseIcon name="x-mark" class="h-3 w-3" />
+              <span>{{ f.error || '失败' }}</span>
+            </span>
           </div>
         </div>
 
@@ -65,9 +78,12 @@
         <button
           type="button"
           @click.stop="removeFile(f)"
-          class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-dark-400 hover:text-dark-200 hover:bg-dark-700 transition-colors text-sm disabled:opacity-30"
+          class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-dark-400 hover:text-dark-200 hover:bg-dark-700 transition-colors disabled:opacity-30"
           :disabled="f.status === 'uploading'"
-        >✕</button>
+          aria-label="移除文件"
+        >
+          <BaseIcon name="x-mark" class="h-4 w-4" />
+        </button>
       </div>
     </div>
   </div>
@@ -76,6 +92,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { uploadFiles, deleteUpload, getUploadPreviewUrl } from '@/api'
+import BaseIcon from '@/components/BaseIcon.vue'
 
 const props = defineProps({
   accept: {
@@ -109,18 +126,19 @@ function isUploading() {
 
 defineExpose({ getAttachmentIds, getFiles, isUploading })
 
+// 返回 BaseIcon name（小写下划线命名）
 function getFileIcon(mime) {
-  if (!mime) return '📄'
-  if (mime.startsWith('image/')) return '🖼️'
-  if (mime.startsWith('video/')) return '🎬'
-  if (mime.startsWith('audio/')) return '🎵'
-  if (mime.includes('pdf')) return '📕'
-  if (mime.includes('zip') || mime.includes('rar') || mime.includes('7z')) return '📦'
-  if (mime.includes('word') || mime.includes('document')) return '📘'
-  if (mime.includes('excel') || mime.includes('sheet')) return '📗'
-  if (mime.includes('powerpoint') || mime.includes('presentation')) return '📙'
-  if (mime.startsWith('text/') || mime.includes('json')) return '📝'
-  return '📄'
+  if (!mime) return 'document'
+  if (mime.startsWith('image/')) return 'photo'
+  if (mime.startsWith('video/')) return 'film'
+  if (mime.startsWith('audio/')) return 'musical-note'
+  if (mime.includes('pdf')) return 'document-text'
+  if (mime.includes('zip') || mime.includes('rar') || mime.includes('7z')) return 'archive-box'
+  if (mime.includes('word') || mime.includes('document')) return 'document-text'
+  if (mime.includes('excel') || mime.includes('sheet')) return 'table-cells'
+  if (mime.includes('powerpoint') || mime.includes('presentation')) return 'presentation-chart-bar'
+  if (mime.startsWith('text/') || mime.includes('json')) return 'document-text'
+  return 'document'
 }
 
 function formatSize(bytes) {

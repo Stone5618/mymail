@@ -67,6 +67,10 @@ func NewRouter(deps Deps) *gin.Engine {
 	}
 	r.GET("/health", healthH.Liveness) // 兼容别名
 
+	// 版本信息端点（公开，无需认证）
+	versionH := handler.NewVersionHandler(deps.Cfg.Version, deps.Cfg.BuildTime, deps.Cfg.CommitSHA)
+	r.GET("/api/version", versionH.GetVersion)
+
 	// ===== 业务端点 =====
 	registerAuthRoutes(r, deps)
 	registerMailRoutes(r, deps)

@@ -2,18 +2,31 @@
   <div class="flex-1 flex flex-col min-h-0">
     <!-- Header -->
     <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-dark-800">
-      <button @click="router.back()" class="btn-ghost text-sm sm:text-base">← 返回</button>
+      <button @click="router.back()" class="btn-ghost text-sm sm:text-base inline-flex items-center gap-1">
+        <BaseIcon name="arrow-left" class="h-4 w-4" />
+        <span>返回</span>
+      </button>
       <div v-if="mail" class="flex items-center gap-1 sm:gap-2">
         <!-- 头部操作区：星标 + 功能按钮 -->
         <div class="flex items-center gap-1 sm:gap-2">
           <button
             @click="toggleStarred"
-            class="text-lg transition-transform hover:scale-125"
+            class="transition-transform hover:scale-125 inline-flex items-center"
             :class="mail.is_starred ? 'text-yellow-400' : 'text-dark-500'"
-          >{{ mail.is_starred ? '★' : '☆' }}</button>
-          <button @click="reply" class="btn-ghost text-sm">↩ 回复</button>
-          <button @click="forward" class="btn-ghost text-sm">↪ 转发</button>
-          <button @click="del" class="btn-ghost text-sm text-red-400">🗑</button>
+          >
+            <BaseIcon name="star" :solid="!!mail.is_starred" class="h-5 w-5" />
+          </button>
+          <button @click="reply" class="btn-ghost text-sm inline-flex items-center gap-1">
+            <BaseIcon name="arrow-uturn-left" class="h-4 w-4" />
+            <span>回复</span>
+          </button>
+          <button @click="forward" class="btn-ghost text-sm inline-flex items-center gap-1">
+            <BaseIcon name="arrow-uturn-right" class="h-4 w-4" />
+            <span>转发</span>
+          </button>
+          <button @click="del" class="btn-ghost text-sm text-red-400 inline-flex items-center">
+            <BaseIcon name="trash" class="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>
@@ -70,9 +83,15 @@
         <!-- Attachments -->
         <div v-if="attachments.length" class="border-t border-dark-700 pt-4">
           <div class="flex items-center justify-between mb-3">
-            <div class="text-sm text-dark-400">📎 附件 ({{ attachments.length }})</div>
+            <div class="text-sm text-dark-400 inline-flex items-center gap-1">
+              <BaseIcon name="paper-clip" class="h-4 w-4" />
+              <span>附件 ({{ attachments.length }})</span>
+            </div>
             <a v-if="attachments.length > 1" :href="'/api/mail/' + mail.id + '/attachments/download-all'"
-              class="text-xs text-primary-400 hover:text-primary-300">📦 下载全部</a>
+              class="text-xs text-primary-400 hover:text-primary-300 inline-flex items-center gap-1">
+              <BaseIcon name="arrow-down-tray" class="h-3.5 w-3.5" />
+              <span>下载全部</span>
+            </a>
           </div>
           <div class="flex flex-wrap gap-2">
             <a
@@ -81,7 +100,7 @@
               target="_blank"
               class="flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-800 border border-dark-700 hover:border-primary-500/50 hover:bg-dark-700 transition-all group"
             >
-              <span class="text-lg group-hover:scale-110 transition-transform">{{ fileIcon(att.filename) }}</span>
+              <BaseIcon :name="fileIcon(att.filename)" class="h-5 w-5 text-dark-300 group-hover:scale-110 transition-transform" />
               <div>
                 <div class="text-sm text-dark-200">{{ att.filename }}</div>
                 <div class="text-xs text-dark-500">{{ formatSize(att.size_bytes) }}</div>
@@ -94,9 +113,14 @@
 
     <!-- Error state -->
     <div v-else class="flex-1 flex flex-col items-center justify-center text-dark-500">
-      <div class="text-5xl mb-3">😕</div>
+      <div class="mb-3">
+        <BaseIcon name="face-frown" class="h-16 w-16" />
+      </div>
       <p>邮件不存在或加载失败</p>
-      <button @click="router.back()" class="btn-ghost mt-3">← 返回</button>
+      <button @click="router.back()" class="btn-ghost mt-3 inline-flex items-center gap-1">
+        <BaseIcon name="arrow-left" class="h-4 w-4" />
+        <span>返回</span>
+      </button>
     </div>
   </div>
 </template>
@@ -108,11 +132,14 @@ import DOMPurify from 'dompurify'
 import { getMail, deleteMail, toggleStar } from '@/api'
 import { useFormat } from '@/composables/useFormat'
 import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
+import BaseIcon from '@/components/BaseIcon.vue'
 
 const props = defineProps({ id: { type: [String, Number], required: true } })
 const router = useRouter()
 const { formatDate, escapeHtml } = useFormat()
 const { toast } = useToast()
+const { confirm } = useConfirm()
 
 // P0-4：HTML 净化，防止 XSS（script/iframe/event handler 等被移除）
 function sanitize(html) {
@@ -133,8 +160,20 @@ function formatSize(bytes) {
 
 function fileIcon(name) {
   const ext = (name || '').split('.').pop().toLowerCase()
-  const icons = { pdf: '📕', doc: '📘', docx: '📘', xls: '📗', xlsx: '📗', png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', zip: '📦', rar: '📦' }
-  return icons[ext] || '📄'
+  const icons = {
+    pdf: 'document-text',
+    doc: 'document-text',
+    docx: 'document-text',
+    xls: 'table-cells',
+    xlsx: 'table-cells',
+    png: 'photo',
+    jpg: 'photo',
+    jpeg: 'photo',
+    gif: 'photo',
+    zip: 'archive-box',
+    rar: 'archive-box'
+  }
+  return icons[ext] || 'document'
 }
 
 async function loadMail() {
@@ -169,6 +208,14 @@ function forward() {
 }
 
 async function del() {
+  const ok = await confirm({
+    title: '删除邮件',
+    message: '确定要删除这封邮件吗？',
+    confirmText: '删除',
+    cancelText: '取消',
+    variant: 'danger',
+  })
+  if (!ok) return
   try {
     await deleteMail(props.id)
     toast('已删除', 'success')

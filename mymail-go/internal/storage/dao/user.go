@@ -29,6 +29,7 @@ type User struct {
 	LockedUntil       sql.NullTime
 	IsDefaultPassword bool
 	Signature         sql.NullString
+	Preferences       string // JSON 字符串，默认 '{}'
 	CreatedAt         string
 	UpdatedAt         string
 }
@@ -36,7 +37,7 @@ type User struct {
 // userColumns 是 users 表的所有列（顺序须与 scanUser 一致）。
 const userColumns = `id, username, email, password_hash, dovecot_password_hash, display_name, role,
 	storage_limit, storage_used, is_active, login_fails, locked_until,
-	is_default_password, signature, created_at, updated_at`
+	is_default_password, signature, preferences, created_at, updated_at`
 
 // scanUser 将一行数据扫描到 User。
 func scanUser(s interface {
@@ -44,17 +45,19 @@ func scanUser(s interface {
 }) (*User, error) {
 	var u User
 	var displayName sql.NullString
+	var preferences sql.NullString
 	var isActive int
 	var isDefault int
 	err := s.Scan(
 		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DovecotPasswordHash, &displayName, &u.Role,
 		&u.StorageLimit, &u.StorageUsed, &isActive, &u.LoginFails, &u.LockedUntil,
-		&isDefault, &u.Signature, &u.CreatedAt, &u.UpdatedAt,
+		&isDefault, &u.Signature, &preferences, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
 	u.DisplayName = displayName.String
+	u.Preferences = preferences.String
 	u.IsActive = isActive == 1
 	u.IsDefaultPassword = isDefault == 1
 	return &u, nil
@@ -209,6 +212,7 @@ func (d *UserDAO) ResetLoginFails(ctx context.Context, userID int64) error {
 type UpdateProfileInput struct {
 	DisplayName *string // nil 表示不更新
 	Signature   *string // nil 表示不更新
+	Preferences *string // nil 表示不更新（JSON 字符串）
 }
 
 // UpdateProfile 动态更新个人资料字段。
@@ -223,6 +227,10 @@ func (d *UserDAO) UpdateProfile(ctx context.Context, userID int64, in UpdateProf
 		fields = append(fields, "signature = ?")
 		args = append(args, *in.Signature)
 	}
+	if in.Preferences != nil {
+		fields = append(fields, "preferences = ?")
+		args = append(args, *in.Preferences)
+	}
 	if len(fields) == 0 {
 		return nil
 	}
@@ -231,6 +239,16 @@ func (d *UserDAO) UpdateProfile(ctx context.Context, userID int64, in UpdateProf
 	q := fmt.Sprintf("UPDATE users SET %s WHERE id = ?", strings.Join(fields, ", "))
 	if _, err := d.db.ExecContext(ctx, q, args...); err != nil {
 		return fmt.Errorf("更新 profile 失败: %w", err)
+	}
+	return nil
+}
+
+// UpdatePreferences 更新用户偏好设置（JSON 字符串）。
+func (d *UserDAO) UpdatePreferences(ctx context.Context, userID int64, preferences string) error {
+	const q = `UPDATE users SET preferences = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+	_, err := d.db.ExecContext(ctx, q, preferences, userID)
+	if err != nil {
+		return fmt.Errorf("更新 preferences 失败: %w", err)
 	}
 	return nil
 }

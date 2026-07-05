@@ -2,7 +2,9 @@
 # 用法：make help 查看所有命令
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-GOFLAGS := -ldflags="-s -w -X main.version=$(VERSION)"
+BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
+COMMIT_SHA ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GOFLAGS := -ldflags="-s -w -X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.CommitSHA=$(COMMIT_SHA)"
 
 .PHONY: all build test lint run dev docker help clean tidy
 

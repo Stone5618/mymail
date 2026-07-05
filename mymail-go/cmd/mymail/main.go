@@ -17,8 +17,12 @@ import (
 	"github.com/mymail/mymail-go/internal/server"
 )
 
-// version 在构建时通过 -ldflags 注入。
-var version = "dev"
+// 构建时通过 -ldflags 注入。
+var (
+	Version   = "dev"
+	BuildTime = ""
+	CommitSHA = ""
+)
 
 func main() {
 	// 1. 加载配置（含 P0-8 修复：JWT_SECRET 强制校验）
@@ -28,12 +32,16 @@ func main() {
 		slog.Error("配置加载失败", "error", err)
 		os.Exit(1)
 	}
-	cfg.Version = version
+	cfg.Version = Version
+	cfg.BuildTime = BuildTime
+	cfg.CommitSHA = CommitSHA
 
 	// 2. 初始化结构化日志（slog + trace_id 注入）
 	logger.Init(cfg.LogLevel, cfg.LogFormat)
 	slog.Info("MyMail 启动中",
-		"version", version,
+		"version", Version,
+		"build_time", BuildTime,
+		"commit_sha", CommitSHA,
 		"env", cfg.Env,
 		"port", cfg.Port,
 	)

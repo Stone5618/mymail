@@ -18,6 +18,10 @@ type Config struct {
 	Version string
 	Debug   bool `mapstructure:"DEBUG"`
 
+	// 构建信息（构建时通过 -ldflags 注入，非环境变量）
+	BuildTime string
+	CommitSHA string
+
 	// 服务器
 	Port int    `mapstructure:"PORT"`
 	Host string `mapstructure:"HOST"`

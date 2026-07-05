@@ -1,8 +1,14 @@
 <template>
   <div class="flex-1 flex flex-col min-h-0">
     <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-dark-800">
-      <h2 class="text-lg sm:text-xl font-semibold text-dark-100">{{ title }}</h2>
-      <button @click="handleBack" class="btn-ghost text-sm">← 返回</button>
+      <h2 class="text-lg sm:text-xl font-semibold text-dark-100 flex items-center gap-2">
+        <BaseIcon :name="titleIcon" class="h-5 w-5" />
+        {{ title }}
+      </h2>
+      <button @click="handleBack" class="btn-ghost text-sm inline-flex items-center gap-1">
+        <BaseIcon name="arrow-left" class="h-4 w-4" />
+        返回
+      </button>
     </div>
 
     <form @submit.prevent="handleSend" class="flex-1 flex flex-col min-h-0">
@@ -14,7 +20,9 @@
             <div class="input-field flex flex-wrap gap-2 min-h-[42px] items-center">
               <span v-for="(r, i) in toRecipients" :key="i" class="flex items-center gap-1 bg-dark-700 text-dark-200 rounded-full px-2.5 py-0.5 text-xs sm:text-sm">
                 {{ r }}
-                <button type="button" @click="toRecipients.splice(i, 1)" class="text-dark-500 hover:text-dark-300">✕</button>
+                <button type="button" @click="toRecipients.splice(i, 1)" class="text-dark-500 hover:text-dark-300 inline-flex items-center">
+                  <BaseIcon name="x-mark" class="h-3.5 w-3.5" />
+                </button>
               </span>
               <input
                 ref="toInput"
@@ -35,8 +43,9 @@
           </div>
 
           <!-- 抄送/密送 -->
-          <button type="button" @click="showCcBcc = !showCcBcc" class="text-sm text-dark-500 hover:text-dark-300 transition-colors">
-            抄送/密送 {{ showCcBcc ? '▴' : '▾' }}
+          <button type="button" @click="showCcBcc = !showCcBcc" class="text-sm text-dark-500 hover:text-dark-300 transition-colors inline-flex items-center gap-1">
+            抄送/密送
+            <BaseIcon :name="showCcBcc ? 'chevron-up' : 'chevron-down'" class="h-4 w-4" />
           </button>
           <div v-if="showCcBcc" class="space-y-3">
             <input v-model="cc" type="text" class="input-field" placeholder="抄送 (多个用逗号分隔)" />
@@ -54,7 +63,7 @@
             <div ref="editorRef" class="min-h-[250px] sm:min-h-[300px] bg-dark-900 rounded-lg border border-dark-700 overflow-hidden"
                  :class="{ hidden: !quillReady }"></div>
             <div v-if="!quillReady && !quillFailed" class="min-h-[250px] sm:min-h-[300px] flex flex-col items-center justify-center bg-dark-900 rounded-lg border border-dark-700 text-dark-500">
-              <span class="animate-spin text-2xl mb-2">⏳</span>
+              <BaseIcon name="arrow-path" class="h-6 w-6 animate-spin mb-2" />
               <span class="text-sm">加载编辑器...</span>
             </div>
             <textarea v-if="quillFailed" v-model="fallbackBody"
@@ -78,13 +87,13 @@
       <!-- 底部发送栏 -->
       <div class="border-t border-dark-800 px-4 sm:px-6 py-3 sm:py-4 bg-dark-900/50">
         <div class="max-w-3xl mx-auto flex items-center justify-between">
-          <button type="button" @click="handleSaveDraft" class="btn-secondary text-sm" :disabled="saving">
-            {{ saving ? '⏳' : '💾' }}
+          <button type="button" @click="handleSaveDraft" class="btn-secondary text-sm inline-flex items-center" :disabled="saving">
+            <BaseIcon :name="saving ? 'arrow-path' : 'archive-box'" :class="['h-4 w-4', saving ? 'animate-spin' : '']" />
             <span class="hidden sm:inline ml-1">{{ saving ? '保存中...' : '保存草稿' }}</span>
           </button>
-          <button type="submit" class="btn-primary text-sm sm:text-base" :disabled="sending || (uploadZone && uploadZone.isUploading())">
-            <span class="hidden sm:inline">{{ sending ? '📤 发送中...' : '📤 发送' }}</span>
-            <span class="sm:hidden">{{ sending ? '⏳' : '📤' }}</span>
+          <button type="submit" class="btn-primary text-sm sm:text-base inline-flex items-center gap-1" :disabled="sending || (uploadZone && uploadZone.isUploading())">
+            <BaseIcon :name="sending ? 'arrow-path' : 'paper-airplane'" :class="['h-4 w-4', sending ? 'animate-spin' : '']" />
+            <span class="hidden sm:inline">{{ sending ? '发送中...' : '发送' }}</span>
           </button>
         </div>
       </div>
@@ -101,11 +110,14 @@ import 'quill/dist/quill.snow.css'
 import { useAuthStore } from '@/stores/auth'
 import { sendMail, saveDraft, getMail, deleteMail } from '@/api'
 import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import UploadZone from '@/components/UploadZone.vue'
+import BaseIcon from '@/components/BaseIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { confirm } = useConfirm()
 const { toast } = useToast()
 
 // P0-4：HTML 净化，防止回复/转发时 XSS（原邮件 body_html 可能含恶意脚本）
@@ -136,10 +148,16 @@ function hasContent() {
   return toRecipients.value.length > 0 || subject.value || (quill && quill.getLength() > 1) || fallbackBody.value
 }
 
-function handleBack() {
+async function handleBack() {
   if (!hasContent()) { router.back(); return }
-  const action = confirm('是否保存草稿？\n\n确定 = 保存并退出\n取消 = 直接退出')
-  if (action) {
+  const ok = await confirm({
+    title: '保存草稿？',
+    message: '是否在退出前保存草稿？',
+    confirmText: '保存并退出',
+    cancelText: '直接退出',
+    variant: 'primary',
+  })
+  if (ok) {
     handleSaveDraft().then(() => router.back())
   } else {
     router.back()
@@ -165,10 +183,17 @@ const replyId = route.query.replyId ? Number(route.query.replyId) : null
 const forwardId = route.query.forwardId ? Number(route.query.forwardId) : null
 
 const title = computed(() => {
-  if (draftId) return '📝 编辑草稿'
-  if (replyId) return '↩ 回复'
-  if (forwardId) return '↪ 转发'
-  return '✏️ 新邮件'
+  if (draftId) return '编辑草稿'
+  if (replyId) return '回复'
+  if (forwardId) return '转发'
+  return '新邮件'
+})
+
+const titleIcon = computed(() => {
+  if (draftId) return 'pencil-square'
+  if (replyId) return 'arrow-uturn-left'
+  if (forwardId) return 'arrow-uturn-right'
+  return 'pencil-square'
 })
 
 function onToInput(e) {

@@ -12,15 +12,19 @@
       <!-- Header -->
       <div class="p-4 border-b border-dark-800 flex items-center justify-between">
         <h1 class="text-lg font-bold text-dark-100 flex items-center gap-2">
-          <span class="text-2xl">📧</span> MyMail
+          <BaseIcon name="envelope" class="h-6 w-6 text-primary-400" />
+          <span>MyMail</span>
         </h1>
-        <button @click="sidebarOpen = false" class="lg:hidden text-dark-500 hover:text-dark-300 text-xl">✕</button>
+        <button @click="sidebarOpen = false" class="lg:hidden text-dark-500 hover:text-dark-300" aria-label="关闭侧边栏">
+          <BaseIcon name="x-mark" class="h-5 w-5" />
+        </button>
       </div>
 
       <!-- Compose -->
       <div class="p-3 border-b border-dark-800">
         <button @click="router.push('/compose'); sidebarOpen = false" class="btn-primary w-full flex items-center justify-center gap-2">
-          ✏️ 写邮件
+          <BaseIcon name="pencil-square" class="h-5 w-5" />
+          <span>写邮件</span>
         </button>
       </div>
 
@@ -33,7 +37,7 @@
           :class="{ active: $route.path === item.to }"
           @click="sidebarOpen = false"
         >
-          <span class="text-lg">{{ item.icon }}</span>
+          <BaseIcon :name="item.icon" class="h-5 w-5 shrink-0" :solid="$route.path === item.to" />
           <span class="flex-1">{{ item.label }}</span>
           <span
             v-if="item.badge"
@@ -60,7 +64,7 @@
             aria-label="退出登录"
             title="退出"
           >
-            ↩
+            <BaseIcon name="arrow-left-on-exit" class="h-5 w-5" />
           </button>
         </div>
       </div>
@@ -70,12 +74,17 @@
     <main class="flex-1 flex flex-col overflow-hidden">
       <!-- Mobile top bar -->
       <div class="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-dark-800 bg-dark-900/80 backdrop-blur-md">
-        <button @click="sidebarOpen = true" class="text-dark-300 hover:text-dark-100 text-xl p-1">☰</button>
+        <button @click="sidebarOpen = true" class="text-dark-300 hover:text-dark-100 p-1" aria-label="打开侧边栏">
+          <BaseIcon name="bars-3" class="h-6 w-6" />
+        </button>
         <span class="text-lg font-semibold text-dark-100 flex items-center gap-2">
-          <span>📧</span> MyMail
+          <BaseIcon name="envelope" class="h-5 w-5 text-primary-400" />
+          <span>MyMail</span>
         </span>
         <div class="flex-1" />
-        <button @click="router.push('/compose')" class="btn-ghost text-lg p-1">✏️</button>
+        <button @click="router.push('/compose')" class="btn-ghost p-1" aria-label="写邮件">
+          <BaseIcon name="pencil-square" class="h-5 w-5" />
+        </button>
       </div>
 
       <router-view v-slot="{ Component }">
@@ -92,6 +101,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useWsStore } from '@/stores/ws'
+import BaseIcon from '@/components/BaseIcon.vue'
 
 const auth = useAuthStore()
 const ws = useWsStore()
@@ -109,13 +119,14 @@ const userInitial = computed(() => {
 })
 
 const navItems = computed(() => [
-  { to: '/inbox', icon: '📥', label: '收件箱', badge: ws.unreadCount || 0 },
-  { to: '/sent', icon: '📤', label: '已发送' },
-  { to: '/drafts', icon: '📝', label: '草稿箱' },
-  { to: '/trash', icon: '🗑️', label: '回收站' },
-  { to: '/junk', icon: '📁', label: '垃圾邮件' },
-  { to: '/settings', icon: '⚙️', label: '设置' },
-  ...(auth.user?.role === 'admin' ? [{ to: '/admin', icon: '👤', label: '管理' }] : []),
+  { to: '/inbox', icon: 'inbox-arrow-down', label: '收件箱', badge: ws.unreadCount || 0 },
+  { to: '/sent', icon: 'paper-airplane', label: '已发送' },
+  { to: '/drafts', icon: 'document-text', label: '草稿箱' },
+  { to: '/trash', icon: 'trash', label: '回收站' },
+  { to: '/junk', icon: 'folder', label: '垃圾邮件' },
+  { to: '/settings', icon: 'cog-6-tooth', label: '设置' },
+  { to: '/about', icon: 'information-circle', label: '关于' },
+  ...(auth.user?.role === 'admin' ? [{ to: '/admin', icon: 'user', label: '管理' }] : []),
 ])
 
 function handleLogout() {

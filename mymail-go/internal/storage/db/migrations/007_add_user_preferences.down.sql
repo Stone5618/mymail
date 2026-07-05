@@ -1,0 +1,1 @@
+-- SQLite 不支持 DROP COLUMN，down 操作为空

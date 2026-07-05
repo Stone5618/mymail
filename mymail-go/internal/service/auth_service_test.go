@@ -373,7 +373,7 @@ func TestAuthService_UpdateProfile_Success(t *testing.T) {
 
 	name := "Alice New"
 	sig := "My signature"
-	err := svc.UpdateProfile(ctx, result.User.ID, &name, &sig)
+	err := svc.UpdateProfile(ctx, result.User.ID, &name, &sig, nil)
 	if err != nil {
 		t.Fatalf("UpdateProfile 失败: %v", err)
 	}

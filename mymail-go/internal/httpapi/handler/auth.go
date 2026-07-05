@@ -112,6 +112,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		Signature:    sig,
 		StorageLimit: user.StorageLimit,
 		StorageUsed:  user.StorageUsed,
+		Preferences:  user.Preferences,
 		CreatedAt:    user.CreatedAt,
 	})
 }
@@ -130,7 +131,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.UpdateProfile(c.Request.Context(), user.ID, req.DisplayName, req.Signature); err != nil {
+	if err := h.svc.UpdateProfile(c.Request.Context(), user.ID, req.DisplayName, req.Signature, req.Preferences); err != nil {
 		writeAuthError(c, err)
 		return
 	}

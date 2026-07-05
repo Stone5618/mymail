@@ -22,6 +22,7 @@ type LoginRequest struct {
 type UpdateProfileRequest struct {
 	DisplayName *string `json:"displayName"`
 	Signature   *string `json:"signature"`
+	Preferences *string `json:"preferences"`
 }
 
 // ChangePasswordRequest 修改密码请求（需校验当前密码）。
@@ -55,6 +56,7 @@ type UserMe struct {
 	Signature    *string `json:"signature"`
 	StorageLimit int64  `json:"storageLimit"`
 	StorageUsed  int64  `json:"storageUsed"`
+	Preferences  string `json:"preferences"`
 	CreatedAt    string `json:"createdAt"`
 }
 
