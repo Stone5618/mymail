@@ -293,6 +293,99 @@ func (s *Store) OpenFile(storagePath string) (*os.File, error) {
 	return f, nil
 }
 
+// dangerousExts 是入站邮件附件禁止保存的危险可执行扩展名（防止落盘可执行文件）。
+// 入站邮件（SaveInboundFile）放宽 MIME 白名单，但仍拦截这些高危类型。
+var dangerousExts = map[string]bool{
+	".exe": true, ".com": true, ".scr": true, ".bat": true, ".cmd": true,
+	".msi": true, ".vbs": true, ".vbe": true, ".js": true, ".jse": true,
+	".wsf": true, ".wsh": true, ".ps1": true, ".psm1": true, ".sh": true,
+	".jar": true, ".app": true, ".dll": true, ".sys": true, ".pif": true,
+	".hta": true, ".cpl": true, ".reg": true, ".lnk": true,
+}
+
+// SaveInboundFile 保存入站邮件（外部 SMTP 收件）的附件到磁盘。
+//
+// 与 SaveFile（用户上传）的区别：
+//   - 放宽 MIME 白名单：外部邮件客户端常将图片/文档标为 application/octet-stream，
+//     直接按白名单校验会误丢附件。此方法改为"魔数优先"策略识别真实类型。
+//   - 仍保留的安全措施：文件大小限制、文件名净化（防路径穿越）、危险可执行扩展名拦截。
+//
+// 返回存储路径（绝对路径）与最终确定的 MIME 类型。
+func (s *Store) SaveInboundFile(in SaveFileInput) (storagePath, finalMime string, err error) {
+	// 1. 大小校验
+	if in.Size > s.maxSize {
+		return "", "", fmt.Errorf("文件大小 %d 超过限制 %d", in.Size, s.maxSize)
+	}
+	if in.Size == 0 {
+		return "", "", fmt.Errorf("文件为空")
+	}
+
+	// 2. 危险扩展名拦截（拒绝落盘可执行文件）
+	ext := strings.ToLower(filepath.Ext(in.Filename))
+	if dangerousExts[ext] {
+		return "", "", fmt.Errorf("禁止的危险文件类型: %s", ext)
+	}
+
+	// 3. 确定最终 MIME：魔数优先，其次声明值，最后兜底 octet-stream
+	finalMime = detectMimeByMagic(in.HeadBytes)
+	if finalMime == "" {
+		declared := strings.ToLower(strings.TrimSpace(in.MimeType))
+		if declared != "" && declared != "application/octet-stream" {
+			finalMime = in.MimeType
+		} else {
+			finalMime = "application/octet-stream"
+		}
+	}
+
+	// 4. 落盘（复用 writeFile，跳过白名单校验）
+	path, err := s.writeFile(in)
+	if err != nil {
+		return "", "", err
+	}
+	return path, finalMime, nil
+}
+
+// writeFile 将附件内容写入磁盘（不做 MIME 白名单校验，仅负责落盘）。
+// 供 SaveInboundFile 复用；用户上传路径仍走 SaveFile（含白名单校验）。
+func (s *Store) writeFile(in SaveFileInput) (storagePath string, err error) {
+	// 创建用户目录
+	userDir := filepath.Join(s.rootPath, fmt.Sprintf("%d", in.UserID))
+	if err := os.MkdirAll(userDir, 0750); err != nil {
+		return "", fmt.Errorf("创建附件目录失败: %w", err)
+	}
+
+	// 生成唯一文件名：{timestamp}-{random}-{originalname}
+	unique := randomHex(8)
+	safeName := sanitizeFilename(in.Filename)
+	filename := fmt.Sprintf("%d-%s-%s", time.Now().Unix(), unique, safeName)
+	fullPath := filepath.Join(userDir, filename)
+
+	// 写入文件
+	f, err := os.Create(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("创建附件文件失败: %w", err)
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+		if err != nil {
+			os.Remove(fullPath)
+		}
+	}()
+
+	if len(in.HeadBytes) > 0 {
+		if _, err := f.Write(in.HeadBytes); err != nil {
+			return "", fmt.Errorf("写入文件头失败: %w", err)
+		}
+	}
+	if _, err := io.Copy(f, in.Reader); err != nil {
+		return "", fmt.Errorf("写入附件内容失败: %w", err)
+	}
+
+	return fullPath, nil
+}
+
 // SaveFromMultipartFile 从 multipart.File 保存附件。
 // 内部自动读取文件头（前 16 字节）用于魔数校验。
 // 返回 storagePath 和实际写入字节数。

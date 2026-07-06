@@ -231,14 +231,14 @@ func (s *session) deliverToOne(username, recipient string, raw []byte, parsed *p
 	// 3. 保存附件到磁盘
 	var attachments []service.LocalAttachment
 	for _, att := range parsed.attachments {
-		storagePath, err := s.saveAttachment(user.ID, att)
+		storagePath, finalMime, err := s.saveAttachment(user.ID, att)
 		if err != nil {
 			slog.Warn("保存附件失败", "filename", att.filename, "error", err)
 			continue
 		}
 		attachments = append(attachments, service.LocalAttachment{
 			Filename:    att.filename,
-			MimeType:    att.mimeType,
+			MimeType:    finalMime,
 			Content:     att.content,
 			StoragePath: storagePath,
 			SizeBytes:   int64(len(att.content)),
@@ -277,10 +277,11 @@ func (s *session) deliverToOne(username, recipient string, raw []byte, parsed *p
 	return s.backend.mailSvc.DeliverLocal(context.Background(), in)
 }
 
-// saveAttachment 将附件保存到磁盘。
-// 调用 attachment.Store.SaveFile 完成校验 + 落盘。
-func (s *session) saveAttachment(userID int64, att parsedAttachment) (string, error) {
-	return s.backend.attStore.SaveFile(attachment.SaveFileInput{
+// saveAttachment 将入站邮件附件保存到磁盘。
+// 调用 attachment.Store.SaveInboundFile：放宽 MIME 白名单（魔数优先识别），
+// 保留大小限制、文件名净化、危险扩展名拦截。返回存储路径与最终 MIME。
+func (s *session) saveAttachment(userID int64, att parsedAttachment) (storagePath, finalMime string, err error) {
+	return s.backend.attStore.SaveInboundFile(attachment.SaveFileInput{
 		UserID:    userID,
 		Filename:  att.filename,
 		MimeType:  att.mimeType,
