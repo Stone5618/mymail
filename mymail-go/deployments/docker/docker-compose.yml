@@ -5,7 +5,7 @@ services:
       context: ../../..
       dockerfile: mymail-go/deployments/docker/Dockerfile
       args:
-        - VERSION=${VERSION:-docker}
+        - VERSION=${VERSION:-0.1.0}
         - BUILD_TIME=${BUILD_TIME:-}
         - COMMIT_SHA=${COMMIT_SHA:-}
     container_name: mymail-app

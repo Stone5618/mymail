@@ -28,6 +28,8 @@
                 ref="toInput"
                 :value="toInputValue"
                 @input="onToInput"
+                @blur="addToRecipient"
+                @paste="onToPaste"
                 @keydown.enter.prevent="addToRecipient"
                 @keydown.tab.prevent="addToRecipient"
                 @keydown.backspace="!toInputValue && toRecipients.length && toRecipients.pop()"
@@ -208,9 +210,22 @@ function onToInput(e) {
 }
 
 function addToRecipient() {
-  const email = toInputValue.value.trim()
-  if (email && email.includes('@')) {
-    toRecipients.value.push(email)
+  const raw = toInputValue.value.trim()
+  if (!raw) return
+  const emails = raw.split(/[,;\s]+/).map(s => s.trim()).filter(s => s.includes('@'))
+  if (emails.length) {
+    toRecipients.value.push(...emails)
+    toInputValue.value = ''
+  }
+}
+
+function onToPaste(e) {
+  const pasted = (e.clipboardData || window.clipboardData).getData('text')
+  if (!pasted) return
+  const emails = pasted.split(/[,;\s]+/).map(s => s.trim()).filter(s => s.includes('@'))
+  if (emails.length) {
+    e.preventDefault()
+    toRecipients.value.push(...emails)
     toInputValue.value = ''
   }
 }
@@ -277,6 +292,7 @@ async function loadReplyOrForward() {
 }
 
 async function handleSend() {
+  addToRecipient()
   if (toRecipients.value.length === 0) { toast('请添加收件人', 'error'); return }
   if (uploadZone.value && uploadZone.value.isUploading()) { toast('请等待附件上传完成', 'error'); return }
   sending.value = true

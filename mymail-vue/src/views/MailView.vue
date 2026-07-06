@@ -75,18 +75,14 @@
           <AvatarDisplay :src="avatarSrc(mail)" :name="displayName(mail)" :size="32" />
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between mb-0.5">
-              <span class="text-sm truncate" :class="mail.is_read ? 'text-dark-300' : 'text-dark-100 font-semibold'">
-                {{ displayName(mail) }}
-              </span>
+              <span class="text-sm truncate" :class="mail.is_read ? 'text-dark-300' : 'text-dark-100 font-semibold'" v-html="highlightText(displayName(mail), search)"></span>
               <div class="flex items-center gap-1.5 shrink-0 ml-2">
                 <!-- 附件图标 -->
                 <span v-if="mail.has_attach" class="text-dark-500 inline-flex items-center" title="有附件"><BaseIcon name="paper-clip" class="h-3.5 w-3.5" /></span>
                 <span class="text-xs text-dark-500">{{ formatDate(mail.received_at) }}</span>
               </div>
             </div>
-            <div class="text-sm truncate" :class="mail.is_read ? 'text-dark-500' : 'text-dark-200'">
-              {{ mail.subject || '(无主题)' }}
-            </div>
+            <div class="text-sm truncate" :class="mail.is_read ? 'text-dark-500' : 'text-dark-200'" v-html="highlightText(mail.subject || '(无主题)', search)"></div>
           </div>
         </div>
       </div>
@@ -141,6 +137,24 @@ function toggleSelectAll() {
 function displayName(mail) {
   if (props.folder === 'SENT' || props.folder === 'DRAFTS') return mail.to_addr
   return mail.from_name || mail.from_addr
+}
+
+function escapeHtml(text) {
+  if (text == null) return ''
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function highlightText(text, query) {
+  const html = escapeHtml(text)
+  const q = escapeHtml((query || '').trim())
+  if (!q) return html
+  const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+  return html.replace(regex, '<mark class="search-highlight">$1</mark>')
 }
 
 function avatarSrc(mail) {
