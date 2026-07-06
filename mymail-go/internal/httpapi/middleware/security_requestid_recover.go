@@ -57,7 +57,7 @@ func Security() gin.HandlerFunc {
 			"default-src 'self'; "+
 				"script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; "+
 				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
-				"img-src 'self' data: blob: https://cravatar.cn https://www.gravatar.com https://fonts.gstatic.com; "+
+				"img-src 'self' data: blob: https://cravatar.cn https://cn.cravatar.com https://www.gravatar.com https://fonts.gstatic.com; "+
 				"connect-src 'self' wss: https://static.cloudflareinsights.com; "+
 				"font-src 'self' https://fonts.gstatic.com; "+
 				"frame-ancestors 'none'; "+
