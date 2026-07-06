@@ -6,15 +6,17 @@ export const useWsStore = defineStore('ws', () => {
   const ws = ref(null)
   const unreadCount = ref(0)
   const connected = ref(false)
+  const wsFailed = ref(false) // WebSocket 长期不可用，已降级为轮询
   let reconnectTimer = null
   let pollTimer = null
   let reconnectAttempts = 0
-  const maxReconnectAttempts = 12 // 达到后改为纯轮询，避免性能损耗
+  const maxReconnectAttempts = 5 // 达到后改为纯轮询，避免性能损耗
 
   function connect() {
     const auth = useAuthStore()
     if (!auth.token) return
     if (document.hidden) return // 页面不可见时暂停连接
+    if (wsFailed.value) return // 已确认 WebSocket 不可用，不再尝试
     if (ws.value) ws.value.close()
 
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -23,6 +25,7 @@ export const useWsStore = defineStore('ws', () => {
     ws.value.onopen = () => {
       connected.value = true
       reconnectAttempts = 0
+      wsFailed.value = false
     }
     ws.value.onmessage = (e) => {
       try {
@@ -34,8 +37,10 @@ export const useWsStore = defineStore('ws', () => {
         }
       } catch { /* ignore non-JSON messages (ping/pong, empty) */ }
     }
-    ws.value.onclose = () => {
+    ws.value.onclose = (ev) => {
       connected.value = false
+      // 1000=正常关闭，1001=离开页面，无需重连；其余异常关闭才重连
+      if (ev.code === 1000 || ev.code === 1001) return
       scheduleReconnect()
     }
     ws.value.onerror = () => {
@@ -51,10 +56,12 @@ export const useWsStore = defineStore('ws', () => {
     if (document.hidden) return
     if (reconnectAttempts >= maxReconnectAttempts) {
       // 长期连不上时放弃 WebSocket，依赖轮询获取未读数
+      wsFailed.value = true
+      startPolling()
       return
     }
     reconnectAttempts++
-    const delay = Math.min(5000 * Math.pow(2, reconnectAttempts - 1), 60000)
+    const delay = Math.min(2000 * Math.pow(2, reconnectAttempts - 1), 30000)
     reconnectTimer = setTimeout(connect, delay)
   }
 
@@ -85,5 +92,5 @@ export const useWsStore = defineStore('ws', () => {
     } catch {}
   }
 
-  return { ws, unreadCount, connected, connect, disconnect, startPolling, stopPolling }
+  return { ws, unreadCount, connected, wsFailed, connect, disconnect, startPolling, stopPolling }
 })
