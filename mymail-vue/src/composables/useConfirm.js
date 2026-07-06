@@ -2,10 +2,16 @@
 // 用法：
 //   const { confirm } = useConfirm()
 //   if (await confirm({ message: '确定删除？' })) { ... }
-import { ref, readonly } from 'vue'
+import { ref } from 'vue'
 
 const visible = ref(false)
-const opts = ref({})
+const opts = ref({
+  title: '',
+  message: '',
+  confirmText: '',
+  cancelText: '',
+  variant: 'danger',
+})
 let resolver = null
 
 function confirm(options = {}) {
@@ -29,8 +35,8 @@ function resolve(value) {
 export function useConfirm() {
   return {
     confirm,
-    visible: readonly(visible),
-    opts: readonly(opts),
+    visible,
+    opts,
     resolve,
   }
 }

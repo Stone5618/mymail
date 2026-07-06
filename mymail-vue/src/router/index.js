@@ -7,7 +7,7 @@ const routes = [
     component: () => import('@/components/AppLayout.vue'),
     meta: { title: '邮件' },
     children: [
-      { path: '', redirect: '/inbox' },
+      { path: '', redirect: '/inbox', meta: { title: '收件箱' } },
       { path: 'inbox', name: 'inbox', component: () => import('@/views/MailView.vue'), props: { folder: 'INBOX' }, meta: { title: '收件箱' } },
       { path: 'sent', name: 'sent', component: () => import('@/views/MailView.vue'), props: { folder: 'SENT' }, meta: { title: '已发送' } },
       { path: 'drafts', name: 'drafts', component: () => import('@/views/MailView.vue'), props: { folder: 'DRAFTS' }, meta: { title: '草稿箱' } },
@@ -39,7 +39,11 @@ router.beforeEach((to) => {
 
 // 根据路由 meta.title 更新页面标题
 router.afterEach((to) => {
-  const title = to.meta?.title
+  if (!to || !to.meta) {
+    document.title = 'MyMail - 邮件平台'
+    return
+  }
+  const title = to.meta.title
   document.title = title ? `${title} - MyMail` : 'MyMail - 邮件平台'
 })
 
