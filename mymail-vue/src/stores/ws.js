@@ -8,16 +8,22 @@ export const useWsStore = defineStore('ws', () => {
   const connected = ref(false)
   let reconnectTimer = null
   let pollTimer = null
+  let reconnectAttempts = 0
+  const maxReconnectAttempts = 12 // 达到后改为纯轮询，避免性能损耗
 
   function connect() {
     const auth = useAuthStore()
     if (!auth.token) return
+    if (document.hidden) return // 页面不可见时暂停连接
     if (ws.value) ws.value.close()
 
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
     ws.value = new WebSocket(`${proto}//${location.host}/ws?token=${encodeURIComponent(auth.token)}`)
 
-    ws.value.onopen = () => { connected.value = true }
+    ws.value.onopen = () => {
+      connected.value = true
+      reconnectAttempts = 0
+    }
     ws.value.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data)
@@ -30,8 +36,26 @@ export const useWsStore = defineStore('ws', () => {
     }
     ws.value.onclose = () => {
       connected.value = false
-      if (auth.token) reconnectTimer = setTimeout(connect, 5000)
+      scheduleReconnect()
     }
+    ws.value.onerror = () => {
+      // 错误处理统一在 onclose 中执行重连
+      connected.value = false
+    }
+  }
+
+  function scheduleReconnect() {
+    const auth = useAuthStore()
+    if (!auth.token) return
+    clearTimeout(reconnectTimer)
+    if (document.hidden) return
+    if (reconnectAttempts >= maxReconnectAttempts) {
+      // 长期连不上时放弃 WebSocket，依赖轮询获取未读数
+      return
+    }
+    reconnectAttempts++
+    const delay = Math.min(5000 * Math.pow(2, reconnectAttempts - 1), 60000)
+    reconnectTimer = setTimeout(connect, delay)
   }
 
   function disconnect() {
@@ -39,6 +63,7 @@ export const useWsStore = defineStore('ws', () => {
     clearInterval(pollTimer)
     if (ws.value) { ws.value.close(); ws.value = null }
     connected.value = false
+    reconnectAttempts = 0
   }
 
   // 未读轮询（兜底 WebSocket）

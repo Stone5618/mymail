@@ -52,13 +52,14 @@ func Security() gin.HandlerFunc {
 		// HSTS：强制 HTTPS（仅对 HTTPS 请求有效）
 		h("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 
-		// CSP：限制资源加载来源
+		// CSP：限制资源加载来源，同时允许必要的外部资源
 		h("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self'; "+
-				"style-src 'self' 'unsafe-inline'; "+
-				"img-src 'self' data: blob:; "+
-				"connect-src 'self' wss:; "+
+				"script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; "+
+				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
+				"img-src 'self' data: blob: https://cravatar.cn https://www.gravatar.com https://fonts.gstatic.com; "+
+				"connect-src 'self' wss: https://static.cloudflareinsights.com; "+
+				"font-src 'self' https://fonts.gstatic.com; "+
 				"frame-ancestors 'none'; "+
 				"base-uri 'self'")
 

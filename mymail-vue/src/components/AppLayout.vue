@@ -141,15 +141,23 @@ function onNewMail() {
   ws.startPolling()
 }
 
+function onVisibilityChange() {
+  if (!document.hidden) {
+    ws.connect()
+  }
+}
+
 onMounted(() => {
   ws.connect()
   ws.startPolling()
   window.addEventListener('mymail:new-mail', onNewMail)
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onUnmounted(() => {
   ws.disconnect()
   ws.stopPolling()
   window.removeEventListener('mymail:new-mail', onNewMail)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>

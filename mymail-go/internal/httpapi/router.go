@@ -150,6 +150,10 @@ func registerSPARoutes(r *gin.Engine) {
 		if cleanPath != "" {
 			if f, err := distFS.Open(cleanPath); err == nil {
 				f.Close()
+				// 带 hash 的资源可长期缓存，index.html 不缓存
+				if strings.HasPrefix(cleanPath, "assets/") {
+					c.Header("Cache-Control", "public, max-age=31536000, immutable")
+				}
 				fileServer.ServeHTTP(c.Writer, c.Request)
 				return
 			}
@@ -157,6 +161,9 @@ func registerSPARoutes(r *gin.Engine) {
 
 		// SPA fallback：返回 index.html（交由 Vue Router 处理）
 		if len(indexHTML) > 0 {
+			c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+			c.Header("Pragma", "no-cache")
+			c.Header("Expires", "0")
 			c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML)
 			return
 		}
