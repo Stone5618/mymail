@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/mymail/mymail-go/internal/audit"
 	"github.com/mymail/mymail-go/internal/crypto"
@@ -72,6 +73,22 @@ type DnsStatus struct {
 	DMARC string
 }
 
+// dnsResolver 返回一个使用公共 DNS 服务器的解析器，避免依赖容器内嵌 DNS 代理。
+func dnsResolver() *net.Resolver {
+	return &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{Timeout: 5 * time.Second}
+			// 优先使用 Google Public DNS，8.8.4.4 作为备用
+			conn, err := d.DialContext(ctx, network, "8.8.8.8:53")
+			if err != nil {
+				return d.DialContext(ctx, network, "8.8.4.4:53")
+			}
+			return conn, nil
+		},
+	}
+}
+
 // CheckDns 检测当前域名 MX/SPF/DMARC 记录配置。
 func (s *AdminService) CheckDns(ctx context.Context) (*DnsStatus, error) {
 	domain := s.domain
@@ -79,15 +96,16 @@ func (s *AdminService) CheckDns(ctx context.Context) (*DnsStatus, error) {
 		return nil, fmt.Errorf("未配置域名")
 	}
 
+	resolver := dnsResolver()
 	status := &DnsStatus{MX: "missing", SPF: "missing", DMARC: "missing"}
 
 	// MX 记录
-	if records, err := net.LookupMX(domain); err == nil && len(records) > 0 {
+	if records, err := resolver.LookupMX(ctx, domain); err == nil && len(records) > 0 {
 		status.MX = "ok"
 	}
 
 	// SPF 记录
-	if records, err := net.LookupTXT(domain); err == nil {
+	if records, err := resolver.LookupTXT(ctx, domain); err == nil {
 		for _, r := range records {
 			if strings.HasPrefix(r, "v=spf1") {
 				status.SPF = "ok"
@@ -97,7 +115,7 @@ func (s *AdminService) CheckDns(ctx context.Context) (*DnsStatus, error) {
 	}
 
 	// DMARC 记录
-	if records, err := net.LookupTXT("_dmarc." + domain); err == nil {
+	if records, err := resolver.LookupTXT(ctx, "_dmarc."+domain); err == nil {
 		for _, r := range records {
 			if strings.HasPrefix(r, "v=DMARC1") {
 				status.DMARC = "ok"

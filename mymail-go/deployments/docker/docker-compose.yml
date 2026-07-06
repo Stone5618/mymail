@@ -9,6 +9,9 @@ services:
         - BUILD_TIME=${BUILD_TIME:-}
         - COMMIT_SHA=${COMMIT_SHA:-}
     container_name: mymail-app
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     user: root
     cap_add:
       - NET_BIND_SERVICE
