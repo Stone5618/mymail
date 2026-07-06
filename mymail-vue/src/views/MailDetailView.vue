@@ -70,25 +70,25 @@
               <BaseIcon name="paper-clip" class="h-4 w-4" />
               <span>附件 ({{ attachments.length }})</span>
             </div>
-            <a v-if="attachments.length > 1" :href="'/api/mail/' + mail.id + '/attachments/download-all'"
+            <a v-if="attachments.length > 1" href="#" @click.prevent="downloadAll"
               class="text-xs text-primary-400 hover:text-primary-300 inline-flex items-center gap-1">
               <BaseIcon name="arrow-down-tray" class="h-3.5 w-3.5" />
               <span>下载全部</span>
             </a>
           </div>
           <div class="flex flex-wrap gap-2">
-            <a
+            <button
+              type="button"
               v-for="att in attachments" :key="att.id"
-              :href="`/api/mail/${mail.id}/attachments/${att.id}/download`"
-              target="_blank"
-              class="flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-800 border border-dark-700 hover:border-primary-500/50 hover:bg-dark-700 transition-all group"
+              @click="downloadOne(att)"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-800 border border-dark-700 hover:border-primary-500/50 hover:bg-dark-700 transition-all group text-left"
             >
               <BaseIcon :name="fileIcon(att.filename)" class="h-5 w-5 text-dark-300 group-hover:scale-110 transition-transform" />
               <div>
                 <div class="text-sm text-dark-200">{{ att.filename }}</div>
                 <div class="text-xs text-dark-500">{{ formatSize(att.size_bytes) }}</div>
               </div>
-            </a>
+            </button>
           </div>
         </div>
       </div>
@@ -112,7 +112,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import DOMPurify from 'dompurify'
-import { getMail, deleteMail, toggleStar } from '@/api'
+import { getMail, deleteMail, toggleStar, downloadAttachment, downloadAllAttachments } from '@/api'
 import { useFormat } from '@/composables/useFormat'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
@@ -177,6 +177,22 @@ async function loadMail() {
 
 function reply() {
   router.push({ name: 'compose', query: { replyId: props.id } })
+}
+
+async function downloadOne(att) {
+  try {
+    await downloadAttachment(props.id, att.id, att.filename)
+  } catch (e) {
+    toast(e.message || '下载失败', 'error')
+  }
+}
+
+async function downloadAll() {
+  try {
+    await downloadAllAttachments(props.id)
+  } catch (e) {
+    toast(e.message || '下载失败', 'error')
+  }
 }
 
 async function toggleStarred() {

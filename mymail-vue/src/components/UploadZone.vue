@@ -59,18 +59,6 @@
           <div class="text-sm text-dark-200 truncate" :title="f.name">{{ f.name }}</div>
           <div class="flex items-center gap-2 text-xs text-dark-400 mt-0.5">
             <span>{{ formatSize(f.size) }}</span>
-            <span v-if="f.status === 'uploading'" class="text-amber-400 flex items-center gap-1">
-              <BaseIcon name="arrow-path" class="h-3 w-3 animate-spin" />
-              <span>上传中...</span>
-            </span>
-            <span v-else-if="f.status === 'done'" class="text-green-400 flex items-center gap-1">
-              <BaseIcon name="check" class="h-3 w-3" />
-              <span>完成</span>
-            </span>
-            <span v-else-if="f.status === 'error'" class="text-red-400 flex items-center gap-1">
-              <BaseIcon name="x-mark" class="h-3 w-3" />
-              <span>{{ f.error || '失败' }}</span>
-            </span>
           </div>
         </div>
 
@@ -78,8 +66,7 @@
         <button
           type="button"
           @click.stop="removeFile(f)"
-          class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-dark-400 hover:text-dark-200 hover:bg-dark-700 transition-colors disabled:opacity-30"
-          :disabled="f.status === 'uploading'"
+          class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-dark-400 hover:text-dark-200 hover:bg-dark-700 transition-colors"
           aria-label="移除文件"
         >
           <BaseIcon name="x-mark" class="h-4 w-4" />
@@ -90,8 +77,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
-import { uploadFiles, deleteUpload, getUploadPreviewUrl } from '@/api'
+import { ref } from 'vue'
 import BaseIcon from '@/components/BaseIcon.vue'
 
 const props = defineProps({
@@ -106,25 +92,18 @@ const emit = defineEmits(['update:attachments'])
 const isDragging = ref(false)
 const files = ref([])
 const dropZone = ref(null)
-// P0-7：上传中计数器，正确管理 isUploading 状态
-const uploadingCount = ref(0)
 
-function getAttachmentIds() {
-  return files.value
-    .filter(f => f.status === 'done' && f.attId)
-    .map(f => f.attId)
-}
-
+// 返回原始 File 对象列表，发送时随 /api/mail/send 一次性提交
 function getFiles() {
   return files.value.map(f => f._file)
 }
 
-// P0-7：返回真实上传状态（修复原始终返回 false 的 bug）
+// 附件仅在前端暂存，发送时才上传，故不存在异步上传中状态
 function isUploading() {
-  return uploadingCount.value > 0
+  return false
 }
 
-defineExpose({ getAttachmentIds, getFiles, isUploading })
+defineExpose({ getFiles, isUploading })
 
 // 返回 BaseIcon name（小写下划线命名）
 function getFileIcon(mime) {
@@ -163,7 +142,7 @@ function onFileSelect(e) {
   e.target.value = ''
 }
 
-async function handleFiles(newFiles) {
+function handleFiles(newFiles) {
   for (const file of newFiles) {
     if (file.size > 25 * 1024 * 1024) continue
     const item = {
@@ -171,51 +150,18 @@ async function handleFiles(newFiles) {
       size: file.size,
       type: file.type,
       mimeType: file.type,
-      status: 'uploading',
-      progress: 0,
-      attId: null,
       previewUrl: null,
-      error: null,
       _file: file,
     }
     if (isImage(file.type)) {
       item.previewUrl = URL.createObjectURL(file)
     }
     files.value.push(item)
-    // P0-7：并行上传，但用 uploadingCount 跟踪
-    uploadOne(item)
   }
+  emitUpdate()
 }
 
-// P0-7：正确管理 uploading 状态（uploading → done/error），用 uploadingCount 跟踪
-async function uploadOne(item) {
-  uploadingCount.value++
-  try {
-    const fd = new FormData()
-    fd.append('files', item._file)
-    const res = await uploadFiles(fd)
-    if (res.files && res.files.length) {
-      item.attId = res.files[0].id
-      if (isImage(item.mimeType)) {
-        item.previewUrl = getUploadPreviewUrl(res.files[0].id)
-      }
-    }
-    item.status = 'done'
-    item.progress = 100
-  } catch (e) {
-    item.status = 'error'
-    item.error = e.message || '上传失败'
-  } finally {
-    uploadingCount.value--
-    emitUpdate()
-  }
-}
-
-async function removeFile(file) {
-  if (file.status === 'uploading') return
-  if (file.attId) {
-    try { await deleteUpload(file.attId) } catch {}
-  }
+function removeFile(file) {
   if (file.previewUrl && file.previewUrl.startsWith('blob:')) {
     URL.revokeObjectURL(file.previewUrl)
   }
@@ -224,6 +170,6 @@ async function removeFile(file) {
 }
 
 function emitUpdate() {
-  emit('update:attachments', getAttachmentIds())
+  emit('update:attachments', files.value.length)
 }
 </script>

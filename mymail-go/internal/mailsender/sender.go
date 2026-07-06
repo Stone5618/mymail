@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -29,16 +30,24 @@ import (
 	"github.com/mymail/mymail-go/internal/resilience"
 )
 
+// SendAttachment 外发邮件附件（内容来自磁盘 StoragePath）。
+type SendAttachment struct {
+	Filename    string // 显示文件名（原始名）
+	MimeType    string // MIME 类型
+	StoragePath string // 磁盘绝对路径
+}
+
 // SendInput 外发邮件输入参数。
 type SendInput struct {
-	From     string   // 发件人邮箱
-	To       []string // 收件人列表
-	Cc       []string // 抄送列表
-	Bcc      []string // 密送列表
-	Subject  string   // 主题
-	BodyHTML string   // HTML 正文
-	BodyText string   // 纯文本正文
-	ReplyTo  string   // 回复地址
+	From        string           // 发件人邮箱
+	To          []string         // 收件人列表
+	Cc          []string         // 抄送列表
+	Bcc         []string         // 密送列表
+	Subject     string           // 主题
+	BodyHTML    string           // HTML 正文
+	BodyText    string           // 纯文本正文
+	ReplyTo     string           // 回复地址
+	Attachments []SendAttachment // 附件列表
 }
 
 // SMTPSender 外部 SMTP 发送器。
@@ -224,6 +233,23 @@ func (s *SMTPSender) buildMessage(in SendInput) (*mail.Msg, error) {
 		msg.SetBodyString(mail.TypeTextHTML, in.BodyHTML)
 	} else if in.BodyText != "" {
 		msg.SetBodyString(mail.TypeTextPlain, in.BodyText)
+	}
+
+	// 添加附件（内容从磁盘 StoragePath 读取，显示名用原始文件名）
+	for _, att := range in.Attachments {
+		if att.StoragePath == "" {
+			continue
+		}
+		f, err := os.Open(att.StoragePath)
+		if err != nil {
+			return nil, fmt.Errorf("打开附件 %s 失败: %w", att.Filename, err)
+		}
+		// AttachReader 会将内容读入内存，读完后可关闭文件句柄
+		if err := msg.AttachReader(att.Filename, f); err != nil {
+			_ = f.Close()
+			return nil, fmt.Errorf("附加文件 %s 失败: %w", att.Filename, err)
+		}
+		_ = f.Close()
 	}
 
 	return msg, nil

@@ -110,15 +110,44 @@ export const getAttachmentUrl = (msgId, attId) =>
 export const getDownloadAllUrl = (msgId) =>
   `/api/mail/${msgId}/attachments/download-all`
 
-// Upload (独立附件上传)
-export const uploadFiles = (formData) => {
-  return request('/mail/upload', { method: 'POST', body: formData })
+// 带 JWT 的附件下载：fetch → blob → 触发浏览器下载
+// 原生 <a href> 无法携带 Authorization 头，会被后端 401 拦截并跳登录，故改用此方式
+async function downloadBlob(path, fallbackName) {
+  const token = getToken()
+  const res = await fetch(BASE + path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (res.status === 401) {
+    setToken(null)
+    localStorage.removeItem('role')
+    const router = await getRouter()
+    router.replace({ name: 'login' })
+    throw new Error('请重新登录')
+  }
+  if (!res.ok) throw new Error('下载失败')
+  // 优先使用响应头中的文件名
+  let filename = fallbackName || 'download'
+  const disp = res.headers.get('Content-Disposition')
+  if (disp) {
+    const m = /filename="?([^"]+)"?/.exec(disp)
+    if (m && m[1]) filename = decodeURIComponent(m[1])
+  }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
-export const deleteUpload = (id) =>
-  request(`/mail/upload/${id}`, { method: 'DELETE' })
+export const downloadAttachment = (msgId, attId, filename) =>
+  downloadBlob(`/mail/${msgId}/attachments/${attId}/download`, filename)
 
-export const getUploadPreviewUrl = (id) => `/api/mail/upload/${id}/preview`
+export const downloadAllAttachments = (msgId) =>
+  downloadBlob(`/mail/${msgId}/attachments/download-all`, 'attachments.zip')
 
 // Batch
 export const batchDelete = (ids) =>

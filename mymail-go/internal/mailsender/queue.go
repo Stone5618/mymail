@@ -14,10 +14,12 @@ package mailsender
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/mymail/mymail-go/internal/service"
 	"github.com/mymail/mymail-go/internal/storage/dao"
 )
 
@@ -144,14 +146,15 @@ func (w *QueueWorker) handleItem(item *dao.MailQueueItem) {
 			)
 		} else {
 			if sendErr := w.smtpSender.Send(ctx, SendInput{
-				From:     item.FromAddr,
-				To:       externalRecipients,
-				Cc:       splitAddresses(item.CcAddrs),
-				Bcc:      splitAddresses(item.BccAddrs),
-				Subject:  item.Subject,
-				BodyHTML: item.BodyHTML,
-				BodyText: item.BodyText,
-				ReplyTo:  item.ReplyTo,
+				From:        item.FromAddr,
+				To:          externalRecipients,
+				Cc:          splitAddresses(item.CcAddrs),
+				Bcc:         splitAddresses(item.BccAddrs),
+				Subject:     item.Subject,
+				BodyHTML:    item.BodyHTML,
+				BodyText:    item.BodyText,
+				ReplyTo:     item.ReplyTo,
+				Attachments: parseQueueAttachments(item),
 			}); sendErr != nil {
 				slog.Error("外域 SMTP 发送失败",
 					"queue_id", item.ID,
@@ -174,6 +177,28 @@ func (w *QueueWorker) handleItem(item *dao.MailQueueItem) {
 	if markErr := w.queueDAO.MarkSent(ctx, item.ID); markErr != nil {
 		slog.Error("标记队列项成功状态出错", "queue_id", item.ID, "error", markErr)
 	}
+}
+
+// parseQueueAttachments 解析队列项的附件 JSON，转换为外发附件列表。
+// 解析失败时返回 nil（不阻断发送，仅丢失附件并记录日志）。
+func parseQueueAttachments(item *dao.MailQueueItem) []SendAttachment {
+	if item.Attachments == "" {
+		return nil
+	}
+	var qas []service.QueueAttachment
+	if err := json.Unmarshal([]byte(item.Attachments), &qas); err != nil {
+		slog.Warn("解析队列附件 JSON 失败", "queue_id", item.ID, "error", err)
+		return nil
+	}
+	out := make([]SendAttachment, 0, len(qas))
+	for _, qa := range qas {
+		out = append(out, SendAttachment{
+			Filename:    qa.Filename,
+			MimeType:    qa.MimeType,
+			StoragePath: qa.StoragePath,
+		})
+	}
+	return out
 }
 
 // recoverStale 崩溃恢复：重置卡死的 sending 项。

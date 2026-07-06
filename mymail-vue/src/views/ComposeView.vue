@@ -250,7 +250,22 @@ async function loadQuill() {
   try {
     await nextTick()
     if (editorRef.value) {
-      quill = new Quill(editorRef.value, { theme: 'snow', placeholder: '写点什么...' })
+      quill = new Quill(editorRef.value, {
+        theme: 'snow',
+        placeholder: '写点什么...',
+        modules: {
+          toolbar: [
+            [{ header: [1, 2, 3, false] }],
+            ['bold', 'italic', 'underline', 'strike'],
+            [{ color: [] }, { background: [] }],
+            [{ list: 'ordered' }, { list: 'bullet' }],
+            [{ align: [] }],
+            ['blockquote', 'code-block'],
+            ['link'],
+            ['clean'],
+          ],
+        },
+      })
       quillReady.value = true
     }
   } catch {
