@@ -18,22 +18,18 @@ const props = defineProps({
 })
 
 const error = ref(false)
-const cacheBust = ref(Date.now())
 
-// 当头像 URL 变化时更新缓存破坏参数，避免浏览器仍显示旧图
+// src 变化时重置错误状态
 watch(() => props.src, () => {
   error.value = false
-  if (props.src && props.src.startsWith('/api/avatars/')) {
-    cacheBust.value = Date.now()
-  }
-}, { immediate: true })
+})
 
+// 直接使用 src，不加 cacheBust 参数
+// 浏览器会基于 URL 缓存头像，避免每次组件挂载都重复加载
+// 上传新头像后由 SettingsView 负责添加 ?t= 参数刷新缓存
 const effectiveSrc = computed(() => {
   if (error.value) return ''
-  const src = props.src
-  if (!src || !src.startsWith('/api/avatars/')) return src
-  const sep = src.includes('?') ? '&' : '?'
-  return `${src}${sep}t=${cacheBust.value}`
+  return props.src
 })
 const initial = computed(() => {
   const n = props.name || '?'

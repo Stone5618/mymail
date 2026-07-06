@@ -520,14 +520,14 @@ func (s *AuthService) UploadAvatar(ctx context.Context, userID int64, fileHeader
 	return avatarURL, nil
 }
 
-// GravatarURL 根据邮箱返回 Gravatar 头像 URL（使用国内 cravatar.cn 镜像）。
+// GravatarURL 根据邮箱返回 Gravatar 头像 URL（使用国内 cn.cravatar.com 镜像，避免 cravatar.cn 301 重定向）。
 func GravatarURL(email string, size int) string {
 	email = strings.ToLower(strings.TrimSpace(email))
 	hash := fmt.Sprintf("%x", md5.Sum([]byte(email)))
 	if size <= 0 {
 		size = 128
 	}
-	return fmt.Sprintf("https://cravatar.cn/avatar/%s?s=%d&d=mp", hash, size)
+	return fmt.Sprintf("https://cn.cravatar.com/avatar/%s?s=%d&d=mp", hash, size)
 }
 
 // recordFailedLogin 记录登录失败审计。

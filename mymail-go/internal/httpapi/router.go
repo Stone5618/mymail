@@ -57,6 +57,7 @@ func NewRouter(deps Deps) *gin.Engine {
 	r.Use(middleware.RequestLogger())
 	r.Use(middleware.CORS(deps.Cfg))
 	r.Use(middleware.Metrics())
+	r.Use(middleware.Gzip())
 
 	// ===== 基础设施端点（无需认证） =====
 	healthH := handler.NewHealthHandler(deps.DB)
