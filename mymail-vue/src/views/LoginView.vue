@@ -106,7 +106,6 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import * as api from '@/api'
 import BaseIcon from '@/components/BaseIcon.vue'
 import LogoIcon from '@/components/LogoIcon.vue'
 
@@ -143,11 +142,8 @@ async function handleLogin() {
   loading.value = true
   error.value = ''
   try {
-    const data = await api.login(loginForm.email, loginForm.password, loginForm.remember)
-    auth.token = data.token
-    auth.user = data.user
-    api.setToken(data.token)
-    if (data.requirePasswordChange) {
+    await auth.login(loginForm.email, loginForm.password, loginForm.remember)
+    if (auth.user?.requirePasswordChange) {
       router.push({ name: 'settings', query: { changePw: '1' } })
     } else {
       router.push('/inbox')
@@ -167,10 +163,7 @@ async function handleRegister() {
   loading.value = true
   error.value = ''
   try {
-    const data = await api.register(registerForm.username, registerForm.password, registerForm.displayName)
-    auth.token = data.token
-    auth.user = data.user
-    api.setToken(data.token)
+    await auth.register(registerForm.username, registerForm.password, registerForm.displayName)
     router.push('/inbox')
   } catch (e) {
     error.value = e.message
