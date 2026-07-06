@@ -14,6 +14,7 @@
 package sanitize
 
 import (
+	"regexp"
 	"sync"
 
 	"github.com/microcosm-cc/bluemonday"
@@ -24,14 +25,38 @@ import (
 var (
 	ugcPolicy     *bluemonday.Policy
 	ugcPolicyOnce sync.Once
+
+	// 只允许 Quill 生成的 ql-* 类，避免外部邮件任意 class 污染应用样式。
+	qlClassRe = regexp.MustCompile(`^(ql-[a-z0-9\-]+)([\s]+ql-[a-z0-9\-]+)*$`)
 )
 
 // policy 返回单例 UGC 策略。
 func policy() *bluemonday.Policy {
 	ugcPolicyOnce.Do(func() {
 		p := bluemonday.UGCPolicy()
+
 		// 额外允许 target 属性（链接新窗口打开）
 		p.AllowAttrs("target").OnElements("a")
+
+		// 允许 class 属性：仅限 Quill 的 ql-* 类，用于保留对齐、字号、代码块等语义。
+		p.AllowAttrs("class").Matching(qlClassRe).Globally()
+
+		// 允许内联 style 属性，并限定安全的 CSS 属性白名单。
+		// 这是修复邮件渲染问题的核心：Quill 编辑器与外部邮件常用 color、
+		// background-color、font-size、text-align 等内联样式得以保留。
+		p.AllowAttrs("style").Globally()
+		p.AllowStyles(
+			"color", "background-color",
+			"font-size", "font-family", "font-weight", "font-style",
+			"text-align", "text-decoration", "text-decoration-line", "text-decoration-style", "text-decoration-color",
+			"line-height",
+			"margin", "margin-top", "margin-bottom", "margin-left", "margin-right",
+			"padding", "padding-top", "padding-bottom", "padding-left", "padding-right",
+			"border", "border-top", "border-bottom", "border-left", "border-right", "border-radius",
+			"width", "height", "max-width", "min-width",
+			"white-space", "word-break", "word-wrap",
+		).Globally()
+
 		ugcPolicy = p
 	})
 	return ugcPolicy

@@ -60,7 +60,7 @@
 
         <!-- Body -->
         <div class="border-t border-dark-700 pt-6 mb-6">
-          <div class="prose prose-invert max-w-none text-dark-200 leading-relaxed" v-html="sanitize(mail.body_html || escapeHtml(mail.body_text))"></div>
+          <div class="mail-body prose prose-invert max-w-none text-dark-200 leading-relaxed ql-editor" v-html="sanitize(mail.body_html || escapeHtml(mail.body_text))"></div>
         </div>
 
         <!-- Attachments -->
@@ -112,6 +112,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import DOMPurify from 'dompurify'
+import 'quill/dist/quill.core.css'
 import { getMail, deleteMail, toggleStar, downloadAttachment, downloadAllAttachments } from '@/api'
 import { useFormat } from '@/composables/useFormat'
 import { useToast } from '@/composables/useToast'
@@ -127,9 +128,13 @@ const { toast } = useToast()
 const { confirm } = useConfirm()
 
 // P0-4：HTML 净化，防止 XSS（script/iframe/event handler 等被移除）
+// 保留 style 属性以显示邮件内联样式（颜色、背景、字号、对齐等）。
 function sanitize(html) {
   if (!html) return ''
-  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    ADD_ATTR: ['style'],
+  })
 }
 
 const mail = ref(null)
@@ -230,6 +235,19 @@ onMounted(loadMail)
 </script>
 
 <style scoped>
+/* 覆盖 Quill 编辑器容器的默认样式（padding、背景、固定字号等），
+   同时保留 .ql-editor 内部的 ql-* 类渲染效果（对齐、字号、代码块、列表等）。 */
+.mail-body.ql-editor {
+  all: unset;
+  display: block;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.mail-body.ql-editor :deep(> *) {
+  cursor: default;
+}
+
 .skel {
   background: linear-gradient(90deg, var(--c-bg-elevated) 25%, var(--c-bg-hover) 50%, var(--c-bg-elevated) 75%);
   background-size: 200% 100%;

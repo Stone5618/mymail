@@ -123,9 +123,13 @@ const { confirm } = useConfirm()
 const { toast } = useToast()
 
 // P0-4：HTML 净化，防止回复/转发时 XSS（原邮件 body_html 可能含恶意脚本）
+// 保留 style 属性，确保原邮件的颜色、背景、字号等样式在回复/转发时可见。
 function sanitize(html) {
   if (!html) return ''
-  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    ADD_ATTR: ['style'],
+  })
 }
 
 const toRecipients = ref([])
