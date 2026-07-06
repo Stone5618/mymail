@@ -9,7 +9,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   src: { type: String, default: '' },
@@ -18,8 +18,23 @@ const props = defineProps({
 })
 
 const error = ref(false)
+const cacheBust = ref(Date.now())
 
-const effectiveSrc = computed(() => (error.value ? '' : props.src))
+// 当头像 URL 变化时更新缓存破坏参数，避免浏览器仍显示旧图
+watch(() => props.src, () => {
+  error.value = false
+  if (props.src && props.src.startsWith('/api/avatars/')) {
+    cacheBust.value = Date.now()
+  }
+}, { immediate: true })
+
+const effectiveSrc = computed(() => {
+  if (error.value) return ''
+  const src = props.src
+  if (!src || !src.startsWith('/api/avatars/')) return src
+  const sep = src.includes('?') ? '&' : '?'
+  return `${src}${sep}t=${cacheBust.value}`
+})
 const initial = computed(() => {
   const n = props.name || '?'
   return n.charAt(0).toUpperCase()

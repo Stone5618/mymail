@@ -164,7 +164,11 @@ async function onAvatarSelected(e) {
     const formData = new FormData()
     formData.append('avatar', file)
     const data = await uploadAvatar(formData)
-    if (auth.user) auth.user.avatarUrl = data.avatarUrl
+    if (auth.user) {
+      // 追加时间戳，避免浏览器缓存导致上传后仍显示旧头像
+      const sep = data.avatarUrl.includes('?') ? '&' : '?'
+      auth.user.avatarUrl = `${data.avatarUrl}${sep}t=${Date.now()}`
+    }
     toast('头像已更新', 'success')
   } catch (err) {
     toast(err.message || '上传失败', 'error')
