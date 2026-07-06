@@ -45,3 +45,15 @@ backups/
 
 # Trae 临时文件
 .trae/
+
+# 文档（README.md 除外）
+**/docs/
+*.md
+!README.md
+
+# 测试代码
+**/*_test.go
+**/tests/
+
+# 锁文件
+*.lock
