@@ -6,6 +6,7 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const token = ref(localStorage.getItem('token') || null)
   const isAuthenticated = computed(() => !!token.value)
+  const requirePasswordChange = ref(false)
 
   // P0-5：将 role 同步到 localStorage，供 router 守卫读取（无需访问 pinia 实例）
   function persistRole(role) {
@@ -19,6 +20,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = data.user
     api.setToken(data.token)
     persistRole(data.user?.role)
+    requirePasswordChange.value = !!data.requirePasswordChange
   }
 
   async function register(username, password, displayName) {
@@ -34,6 +36,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       user.value = await api.getMe()
       persistRole(user.value?.role)
+      requirePasswordChange.value = !!user.value?.isDefaultPassword
       return true
     } catch {
       logout()
@@ -46,7 +49,12 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     api.setToken(null)
     persistRole(null)
+    requirePasswordChange.value = false
   }
 
-  return { user, token, isAuthenticated, login, register, fetchMe, logout }
+  function clearRequirePasswordChange() {
+    requirePasswordChange.value = false
+  }
+
+  return { user, token, isAuthenticated, requirePasswordChange, login, register, fetchMe, logout, clearRequirePasswordChange }
 })

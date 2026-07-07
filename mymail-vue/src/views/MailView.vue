@@ -25,6 +25,7 @@
           />
         </div>
         <button v-if="mails.length > 0" @click="toggleSelectAll" class="btn-ghost text-sm inline-flex items-center" :title="allSelected ? '取消全选' : '全选'"><BaseIcon name="check-circle" :solid="allSelected" class="h-4 w-4" /></button>
+        <button v-if="folder === 'TRASH' && mails.length > 0" @click="emptyTrashConfirm" class="btn-ghost text-sm text-red-400 inline-flex items-center gap-1" title="清空回收站"><BaseIcon name="trash" class="h-4 w-4" /><span class="hidden sm:inline">清空</span></button>
         <button @click="loadMails(1)" class="btn-ghost text-sm inline-flex items-center" title="刷新"><BaseIcon name="arrow-path" class="h-4 w-4" /></button>
       </div>
     </div>
@@ -36,6 +37,7 @@
         <button @click="batchRead" class="btn-ghost text-xs sm:text-sm inline-flex items-center gap-1"><BaseIcon name="envelope-open" class="h-4 w-4" /><span>已读</span></button>
         <button @click="batchUnread" class="btn-ghost text-xs sm:text-sm inline-flex items-center gap-1"><BaseIcon name="envelope" class="h-4 w-4" /><span>未读</span></button>
         <button @click="batchDelete" class="btn-ghost text-xs sm:text-sm text-red-400 inline-flex items-center gap-1"><BaseIcon name="trash" class="h-4 w-4" /><span>删除</span></button>
+        <button v-if="folder === 'TRASH'" @click="batchRestore" class="btn-ghost text-xs sm:text-sm text-primary-400 inline-flex items-center gap-1"><BaseIcon name="arrow-uturn-left" class="h-4 w-4" /><span>恢复</span></button>
         <button @click="selected = []" class="btn-ghost text-xs sm:text-sm ml-auto">取消</button>
       </div>
     </transition>
@@ -100,7 +102,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getMailList, markRead, markUnread, toggleStar, batchMarkRead, batchDelete as apiBatchDelete } from '@/api'
+import { getMailList, markRead, markUnread, toggleStar, batchMarkRead, batchDelete as apiBatchDelete, restoreMail, emptyTrash as apiEmptyTrash } from '@/api'
 import { useFormat } from '@/composables/useFormat'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
@@ -234,6 +236,34 @@ async function batchDelete() {
     toast('删除失败', 'error')
   }
   loadMails(page.value)
+}
+
+async function batchRestore() {
+  try {
+    await Promise.all(selected.value.map(id => restoreMail(id)))
+    toast(`已恢复 ${selected.value.length} 封邮件`, 'success')
+  } catch (e) {
+    toast('恢复失败', 'error')
+  }
+  loadMails(page.value)
+}
+
+async function emptyTrashConfirm() {
+  const ok = await confirm({
+    title: '清空回收站',
+    message: '确定要清空回收站吗？此操作不可撤销，所有邮件将被永久删除。',
+    confirmText: '清空',
+    cancelText: '取消',
+    variant: 'danger',
+  })
+  if (!ok) return
+  try {
+    await apiEmptyTrash()
+    toast('回收站已清空', 'success')
+  } catch (e) {
+    toast('清空失败', 'error')
+  }
+  loadMails(1)
 }
 
 watch(() => props.folder, () => { starredOnly.value = false; loadMails(1) })

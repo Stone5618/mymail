@@ -75,20 +75,20 @@ export const useWsStore = defineStore('ws', () => {
 
   // 未读轮询（兜底 WebSocket）
   async function startPolling() {
-    const { getMailList } = await import('@/api')
+    const { getUnreadCount } = await import('@/api')
     stopPolling()
-    await refreshUnread(getMailList)
-    pollTimer = setInterval(() => refreshUnread(getMailList), 10000)
+    await refreshUnread(getUnreadCount)
+    pollTimer = setInterval(() => refreshUnread(getUnreadCount), 10000)
   }
 
   function stopPolling() {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
   }
 
-  async function refreshUnread(getMailList) {
+  async function refreshUnread(getUnreadCount) {
     try {
-      const data = await getMailList({ folder: 'INBOX', limit: 1 })
-      unreadCount.value = data.unreadCount || 0
+      const data = await getUnreadCount()
+      unreadCount.value = data.INBOX || 0
     } catch {}
   }
 

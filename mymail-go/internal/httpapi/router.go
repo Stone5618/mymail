@@ -266,13 +266,15 @@ func registerAPIKeyRoutes(r *gin.Engine, deps Deps) {
 // 端点：
 //
 //	GET    /api/admin/stats           - 用户统计
+//	GET    /api/admin/dns-status      - DNS 检测
+//	GET    /api/admin/config          - 系统配置只读展示
+//	GET    /api/admin/audit-logs      - 审计日志列表（分页+筛选）
+//	GET    /api/admin/mails           - 邮件列表管理（无正文）
 //	GET    /api/admin/users           - 用户列表
 //	GET    /api/admin/users/:id       - 用户详情
 //	POST   /api/admin/users           - 创建用户
 //	PUT    /api/admin/users/:id       - 更新用户
 //	DELETE /api/admin/users/:id       - 软删除用户
-//	GET    /api/admin/settings        - 查询全局设置
-//	PUT    /api/admin/settings        - 更新全局设置
 func registerAdminRoutes(r *gin.Engine, deps Deps) {
 	adminH := handler.NewAdminHandler(deps.AdminService)
 
@@ -282,13 +284,15 @@ func registerAdminRoutes(r *gin.Engine, deps Deps) {
 	{
 		g.GET("/stats", adminH.Stats)
 		g.GET("/dns-status", adminH.CheckDns)
+		g.GET("/config", adminH.GetSystemConfig)
+		g.GET("/audit-logs", adminH.ListAuditLogs)
+		g.GET("/mails", adminH.ListMails)
 		g.GET("/users", adminH.ListUsers)
 		g.GET("/users/:id", adminH.GetUser)
 		g.POST("/users", adminH.CreateUser)
 		g.PUT("/users/:id", adminH.UpdateUser)
 		g.DELETE("/users/:id", adminH.DeleteUser)
-		g.GET("/settings", adminH.GetSettings)
-		g.PUT("/settings", adminH.UpdateSettings)
+		g.POST("/maintenance/resanitize", adminH.Resanitize)
 	}
 }
 

@@ -69,6 +69,9 @@ export const updateProfile = (data) =>
 export const changePassword = (currentPw, newPw) =>
   request('/auth/password', { method: 'PUT', body: { currentPassword: currentPw, newPassword: newPw } })
 
+export const changeDefaultPassword = (newPw) =>
+  request('/auth/change-default-password', { method: 'POST', body: { newPassword: newPw } })
+
 export const uploadAvatar = (formData) =>
   request('/auth/avatar', { method: 'POST', body: formData })
 
@@ -96,6 +99,15 @@ export const markRead = (id) =>
 
 export const markUnread = (id) =>
   request(`/mail/${id}/unread`, { method: 'PUT' })
+
+export const getUnreadCount = () =>
+  request('/mail/unread-count')
+
+export const restoreMail = (id) =>
+  request(`/mail/${id}/restore`, { method: 'PUT' })
+
+export const emptyTrash = () =>
+  request('/mail/empty-trash', { method: 'POST' })
 
 export const moveToFolder = (id, folder) =>
   request('/mail/batch/move', { method: 'POST', body: { ids: [id], folder } })
@@ -166,5 +178,48 @@ export const deleteUser = (id) => request(`/admin/users/${id}`, { method: 'DELET
 export const disableUser = (id) => request(`/admin/users/${id}`, { method: 'PUT', body: { isActive: false } })
 export const enableUser = (id) => request(`/admin/users/${id}`, { method: 'PUT', body: { isActive: true } })
 export const resetPassword = (id, password) => request(`/admin/users/${id}`, { method: 'PUT', body: { password } })
+export const createUser = (data) => request('/admin/users', { method: 'POST', body: data })
+export const updateUser = (id, data) => request(`/admin/users/${id}`, { method: 'PUT', body: data })
 export const checkDns = () => request('/admin/dns-status')
 export const getStats = () => request('/admin/stats')
+export const getSystemConfig = () => request('/admin/config')
+export const resanitizeAllMails = () => request('/admin/maintenance/resanitize', { method: 'POST', body: { confirm: true } })
+
+// ===== 审计日志（AC-6） =====
+export const getAuditLogs = (params) => {
+  const query = new URLSearchParams()
+  if (params?.page) query.set('page', params.page)
+  if (params?.page_size) query.set('page_size', params.page_size)
+  if (params?.actor_type) query.set('actor_type', params.actor_type)
+  if (params?.action) query.set('action', params.action)
+  if (params?.result) query.set('result', params.result)
+  if (params?.start) query.set('start', params.start)
+  if (params?.end) query.set('end', params.end)
+  const qs = query.toString()
+  return request(qs ? `/admin/audit-logs?${qs}` : '/admin/audit-logs')
+}
+
+// ===== 邮件列表管理（AC-9） =====
+export const getAdminMails = (params) => {
+  const query = new URLSearchParams()
+  if (params?.page) query.set('page', params.page)
+  if (params?.page_size) query.set('page_size', params.page_size)
+  if (params?.user_id) query.set('user_id', params.user_id)
+  if (params?.folder) query.set('folder', params.folder)
+  if (params?.is_read !== undefined && params?.is_read !== '') query.set('is_read', params.is_read)
+  if (params?.start) query.set('start', params.start)
+  if (params?.end) query.set('end', params.end)
+  const qs = query.toString()
+  return request(qs ? `/admin/mails?${qs}` : '/admin/mails')
+}
+
+// ===== API Key 管理（AC-11） =====
+export const listAPIKeys = () => request('/auth/api-keys')
+export const createAPIKey = (data) => request('/auth/api-keys', { method: 'POST', body: data })
+export const deleteAPIKey = (id) => request(`/auth/api-keys/${id}`, { method: 'DELETE' })
+
+// ===== 邮件规则管理（AC-12） =====
+export const listRules = () => request('/rules')
+export const createRule = (data) => request('/rules', { method: 'POST', body: data })
+export const updateRule = (id, data) => request(`/rules/${id}`, { method: 'PUT', body: data })
+export const deleteRule = (id) => request(`/rules/${id}`, { method: 'DELETE' })

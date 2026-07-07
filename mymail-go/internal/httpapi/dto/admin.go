@@ -53,23 +53,6 @@ type UpdateUserRequest struct {
 	Password     *string `json:"password"`
 }
 
-// SettingsResponse 设置响应。
-type SettingsResponse struct {
-	Settings []SettingItem `json:"settings"`
-}
-
-// SettingItem 单个设置项。
-type SettingItem struct {
-	Key       string `json:"key"`
-	Value     string `json:"value"`
-	UpdatedAt string `json:"updated_at"`
-}
-
-// UpdateSettingsRequest 更新设置请求。
-type UpdateSettingsRequest struct {
-	Settings map[string]string `json:"settings"`
-}
-
 // APIKeyResponse API Key 响应（列表展示，不含明文）。
 type APIKeyResponse struct {
 	ID         int64    `json:"id"`

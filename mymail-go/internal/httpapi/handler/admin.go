@@ -4,13 +4,14 @@
 // 端点清单：
 //   管理员（/api/admin/*，需 Authenticate + RequireAdmin 中间件）：
 //     GET    /api/admin/stats           - 用户统计
+//     GET    /api/admin/dns-status      - DNS 检测
+//     GET    /api/admin/config          - 系统配置只读展示
+//     GET    /api/admin/audit-logs      - 审计日志列表（分页+筛选）
 //     GET    /api/admin/users           - 用户列表
 //     GET    /api/admin/users/:id       - 用户详情
 //     POST   /api/admin/users           - 创建用户
 //     PUT    /api/admin/users/:id       - 更新用户
 //     DELETE /api/admin/users/:id       - 软删除用户
-//     GET    /api/admin/settings        - 查询全局设置
-//     PUT    /api/admin/settings        - 更新全局设置
 //
 //   API Key（/api/auth/api-keys/*，需 Authenticate 中间件，用户维度）：
 //     POST   /api/auth/api-keys         - 创建 API Key（明文仅返回一次）
@@ -27,9 +28,11 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mymail/mymail-go/internal/audit"
 	"github.com/mymail/mymail-go/internal/httpapi/dto"
 	"github.com/mymail/mymail-go/internal/httpapi/middleware"
 	"github.com/mymail/mymail-go/internal/service"
@@ -167,36 +170,124 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.MessageResponse{Message: "删除成功"})
 }
 
-// GetSettings GET /api/admin/settings
-func (h *AdminHandler) GetSettings(c *gin.Context) {
-	settings, err := h.adminSvc.GetSettings(c.Request.Context())
+// GetSystemConfig GET /api/admin/config
+// 返回当前系统配置（按分组、脱敏，只读展示）。
+func (h *AdminHandler) GetSystemConfig(c *gin.Context) {
+	groups := h.adminSvc.GetSystemConfig()
+	c.JSON(http.StatusOK, gin.H{"groups": groups})
+}
+
+// ListAuditLogs GET /api/admin/audit-logs
+// 分页查询审计日志，支持 actor_type/action/result/时间范围筛选（AC-6）。
+//
+// Query 参数：
+//   - page: 页码，默认 1
+//   - page_size: 每页条数，默认 50，最大 100
+//   - actor_type: admin/user/api/smtp/system
+//   - action: 动作前缀（如 admin.user 匹配 admin.user.* ）
+//   - result: success/failure/denied
+//   - start: 起始时间（2006-01-02 格式）
+//   - end: 结束时间（2006-01-02 格式）
+func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
+
+	filter := audit.AuditFilter{
+		ActorType: c.Query("actor_type"),
+		Action:    c.Query("action"),
+		Result:    c.Query("result"),
+	}
+	if startStr := c.Query("start"); startStr != "" {
+		if t, err := time.Parse("2006-01-02", startStr); err == nil {
+			filter.StartTime = t
+		}
+	}
+	if endStr := c.Query("end"); endStr != "" {
+		if t, err := time.Parse("2006-01-02", endStr); err == nil {
+			// end 含当天（设置为次日 00:00:00 前一刻）
+			filter.EndTime = t.Add(24*time.Hour - time.Second)
+		}
+	}
+
+	result, err := h.adminSvc.ListAuditLogs(c.Request.Context(), filter, page, pageSize)
 	if err != nil {
 		writeAuthError(c, err)
 		return
 	}
-	items := make([]dto.SettingItem, 0, len(settings))
-	for _, s := range settings {
-		items = append(items, dto.SettingItem{
-			Key:       s.Key,
-			Value:     s.Value,
-			UpdatedAt: s.UpdatedAt,
-		})
-	}
-	c.JSON(http.StatusOK, dto.SettingsResponse{Settings: items})
+	c.JSON(http.StatusOK, result)
 }
 
-// UpdateSettings PUT /api/admin/settings
-func (h *AdminHandler) UpdateSettings(c *gin.Context) {
-	var req dto.UpdateSettingsRequest
+// Resanitize POST /api/admin/maintenance/resanitize
+// 用当前净化策略对全量 body_html_raw 重新净化并更新 body_html（AC-7）。
+// 请求体要求 {"confirm": true} 防误触。
+func (h *AdminHandler) Resanitize(c *gin.Context) {
+	var req struct {
+		Confirm bool `json:"confirm"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "请求参数无效"})
 		return
 	}
-	if err := h.adminSvc.UpdateSettings(c.Request.Context(), req.Settings); err != nil {
+	if !req.Confirm {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "需 confirm=true 才能执行"})
+		return
+	}
+	result, err := h.adminSvc.ResanitizeAllMails(c.Request.Context())
+	if err != nil {
 		writeAuthError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, dto.MessageResponse{Message: "更新成功"})
+	c.JSON(http.StatusOK, gin.H{
+		"total":   result.Total,
+		"updated": result.Updated,
+		"skipped": result.Skipped,
+	})
+}
+
+// ListMails GET /api/admin/mails
+// 管理员邮件列表查询（AC-9），仅返回列表级元数据，不含正文/HTML/邮件头。
+//
+// Query 参数：
+//   - page: 页码，默认 1
+//   - page_size: 每页条数，默认 50，最大 200
+//   - user_id: 用户 ID 筛选（0 表示不限）
+//   - folder: 文件夹筛选（INBOX/SENT/DRAFTS/TRASH/JUNK）
+//   - is_read: 已读状态筛选（true/false）
+//   - start: 起始时间（2006-01-02 格式）
+//   - end: 结束时间（2006-01-02 格式）
+func (h *AdminHandler) ListMails(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
+
+	filter := dao.AdminMailFilter{
+		Folder: c.Query("folder"),
+	}
+	if uidStr := c.Query("user_id"); uidStr != "" {
+		if uid, err := strconv.ParseInt(uidStr, 10, 64); err == nil && uid > 0 {
+			filter.UserID = uid
+		}
+	}
+	if isReadStr := c.Query("is_read"); isReadStr != "" {
+		isRead := isReadStr == "true" || isReadStr == "1"
+		filter.IsRead = &isRead
+	}
+	if startStr := c.Query("start"); startStr != "" {
+		if t, err := time.Parse("2006-01-02", startStr); err == nil {
+			filter.StartTime = t
+		}
+	}
+	if endStr := c.Query("end"); endStr != "" {
+		if t, err := time.Parse("2006-01-02", endStr); err == nil {
+			filter.EndTime = t.Add(24*time.Hour - time.Second)
+		}
+	}
+
+	result, err := h.adminSvc.ListAllMails(c.Request.Context(), filter, page, pageSize)
+	if err != nil {
+		writeAuthError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
 }
 
 // ============ APIKeyHandler ============

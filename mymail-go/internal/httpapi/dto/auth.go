@@ -49,17 +49,18 @@ type UserPublic struct {
 
 // UserMe /api/auth/me 响应（字段最全，camelCase）。
 type UserMe struct {
-	ID           int64   `json:"id"`
-	Username     string  `json:"username"`
-	Email        string  `json:"email"`
-	DisplayName  string  `json:"displayName"`
-	Role         string  `json:"role"`
-	Signature    *string `json:"signature"`
-	StorageLimit int64   `json:"storageLimit"`
-	StorageUsed  int64   `json:"storageUsed"`
-	Preferences  string  `json:"preferences"`
-	AvatarURL    string  `json:"avatarUrl"`
-	CreatedAt    string  `json:"createdAt"`
+	ID                  int64   `json:"id"`
+	Username            string  `json:"username"`
+	Email               string  `json:"email"`
+	DisplayName         string  `json:"displayName"`
+	Role                string  `json:"role"`
+	Signature           *string `json:"signature"`
+	StorageLimit        int64   `json:"storageLimit"`
+	StorageUsed         int64   `json:"storageUsed"`
+	Preferences         string  `json:"preferences"`
+	AvatarURL           string  `json:"avatarUrl"`
+	IsDefaultPassword   bool    `json:"isDefaultPassword"`
+	CreatedAt           string  `json:"createdAt"`
 }
 
 // AuthResponse 认证成功响应（login/register）。

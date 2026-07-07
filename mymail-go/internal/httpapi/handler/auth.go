@@ -104,17 +104,18 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.UserMe{
-		ID:           user.ID,
-		Username:     user.Username,
-		Email:        user.Email,
-		DisplayName:  user.DisplayName,
-		Role:         user.Role,
-		Signature:    sig,
-		StorageLimit: user.StorageLimit,
-		StorageUsed:  user.StorageUsed,
-		Preferences:  user.Preferences,
-		AvatarURL:    user.AvatarURL,
-		CreatedAt:    user.CreatedAt,
+		ID:                user.ID,
+		Username:          user.Username,
+		Email:             user.Email,
+		DisplayName:       user.DisplayName,
+		Role:              user.Role,
+		Signature:         sig,
+		StorageLimit:      user.StorageLimit,
+		StorageUsed:       user.StorageUsed,
+		Preferences:       user.Preferences,
+		AvatarURL:         user.AvatarURL,
+		IsDefaultPassword: user.IsDefaultPassword,
+		CreatedAt:         user.CreatedAt,
 	})
 }
 

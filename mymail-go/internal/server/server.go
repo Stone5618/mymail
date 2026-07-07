@@ -38,6 +38,7 @@ type Server struct {
 	rateLimiter *smtp.RateLimiter       // SMTP 连接限流器（Shutdown 时停止后台清理）
 	smtpSender  *mailsender.SMTPSender   // 外部 SMTP 发送器（供 queue 外域发送）
 	wsHub       *ws.Hub                  // WebSocket 连接管理器（Shutdown 时优雅关闭）
+	auditCancel context.CancelFunc       // 审计日志清理 goroutine 取消函数（Shutdown 时停止）
 }
 
 // New 构建服务器实例，初始化 DB、迁移、追踪、路由。
@@ -70,9 +71,8 @@ func New(ctx context.Context, cfg *config.Config) (*Server, error) {
 	sendLogDAO := dao.NewSendLogDAO(database)
 	queueDAO := dao.NewMailQueueDAO(database)
 
-	// 3.1 阶段 5：初始化 API Key / Settings / Rule DAO
+	// 3.1 阶段 5：初始化 API Key / Rule DAO
 	apiKeyDAO := dao.NewAPIKeyDAO(database)
-	settingsDAO := dao.NewSettingsDAO(database)
 	ruleDAO := dao.NewRuleDAO(database)
 
 	// 4. 初始化 JWT 管理器（P0-8：强制校验已在 config.Validate 完成）
@@ -90,6 +90,8 @@ func New(ctx context.Context, cfg *config.Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("初始化审计日志器失败: %w", err)
 	}
+	// AC-8：审计日志查询/清理 DAO（与 Logger 内部 DAO 同库，独立实例用于读/删）
+	auditDAO := audit.NewAuditDAO(database)
 
 	// 6. 初始化 Service 层
 	authSvc := service.NewAuthService(userDAO, jwtMgr, auditLogger, cfg.Domain, cfg.MaildirPath, cfg.AvatarPath)
@@ -101,11 +103,11 @@ func New(ctx context.Context, cfg *config.Config) (*Server, error) {
 
 	// 6.1 阶段 5：初始化 API Key / Admin / Rule Service
 	//   - APIKeyService 实现 middleware.APIKeyVerifier 接口，供 /api/v1/* 认证
-	//   - AdminService 处理管理员用户管理与全局设置
+	//   - AdminService 处理管理员用户管理
 	//   - RuleService 处理用户邮件规则 CRUD
 	//   注：每用户 API Key 上限 10 把
 	apiKeySvc := service.NewAPIKeyService(apiKeyDAO, auditLogger, 10)
-	adminSvc := service.NewAdminService(userDAO, settingsDAO, msgDAO, auditLogger, cfg.Domain)
+	adminSvc := service.NewAdminService(userDAO, msgDAO, auditLogger, auditDAO, cfg.Domain, cfg)
 	ruleSvc := service.NewRuleService(ruleDAO)
 
 	// 6.2 初始化附件文件存储（P0-7：内部含 MIME 白名单 + 魔数校验）
@@ -206,6 +208,10 @@ func New(ctx context.Context, cfg *config.Config) (*Server, error) {
 	smtpSender := mailsender.NewSMTPSender(cfg)
 	queueWorker := mailsender.NewQueueWorker(localDeliverer, queueDAO, 5*time.Second, 5, smtpSender)
 
+	// 11. AC-8：启动审计日志定时清理 goroutine（按 AUDIT_RETENTION_DAYS 清理过期日志）
+	auditCtx, auditCancel := context.WithCancel(context.Background())
+	go audit.StartCleanup(auditCtx, auditDAO, cfg.AuditRetentionDays, 500)
+
 	return &Server{
 		cfg:         cfg,
 		db:          database,
@@ -217,6 +223,7 @@ func New(ctx context.Context, cfg *config.Config) (*Server, error) {
 		rateLimiter: rateLimiter,
 		smtpSender:  smtpSender,
 		wsHub:       wsHub,
+		auditCancel: auditCancel,
 	}, nil
 }
 
@@ -276,6 +283,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	// 3.2 阶段 6：优雅关闭 WebSocket Hub（draining 所有连接）
 	if s.wsHub != nil {
 		s.wsHub.Shutdown()
+	}
+
+	// 3.3 AC-8：停止审计日志清理 goroutine
+	if s.auditCancel != nil {
+		s.auditCancel()
 	}
 
 	// 4. 关闭追踪 exporter

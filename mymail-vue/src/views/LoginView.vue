@@ -143,8 +143,8 @@ async function handleLogin() {
   error.value = ''
   try {
     await auth.login(loginForm.email, loginForm.password, loginForm.remember)
-    if (auth.user?.requirePasswordChange) {
-      router.push({ name: 'settings', query: { changePw: '1' } })
+    if (auth.requirePasswordChange) {
+      router.push({ name: 'change-default-password' })
     } else {
       router.push('/inbox')
     }

@@ -35,4 +35,18 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // 将 vue-router 拆到独立 chunk，打破 main.js ↔ router/index.js 的循环依赖
+        // 否则 Vite 会把 vue-router 并入主 chunk，导致 router chunk 在主 chunk
+        // 完成初始化前调用 createWebHistory()，引发 "$m is not a function"
+        manualChunks(id) {
+          if (id.includes('node_modules/vue-router')) {
+            return 'vue-router'
+          }
+        },
+      },
+    },
+  },
 })

@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/mymail/mymail-go/internal/storage/db"
 )
@@ -646,4 +647,186 @@ func (d *MessageDAO) BatchSoftDelete(ctx context.Context, userID int64, ids []in
 // DB 返回底层 *db.DB（供服务层做事务编排）。
 func (d *MessageDAO) DB() *db.DB {
 	return d.db
+}
+
+// MessageRawHTML 轻量结构，仅含 ID 与 BodyHTMLRaw，用于重新净化（AC-7）。
+type MessageRawHTML struct {
+	ID          int64
+	BodyHTMLRaw string
+}
+
+// ListAllWithRawHTML 列出所有 body_html_raw 非空的邮件（仅 ID + BodyHTMLRaw）。
+// 用于管理员重新净化（AC-7）。仅查询必要字段，避免拉取全量数据。
+func (d *MessageDAO) ListAllWithRawHTML(ctx context.Context) ([]*MessageRawHTML, error) {
+	rows, err := d.db.QueryContext(ctx,
+		`SELECT id, body_html_raw FROM messages WHERE body_html_raw IS NOT NULL AND body_html_raw != ''`)
+	if err != nil {
+		return nil, fmt.Errorf("查询 body_html_raw 非空邮件失败: %w", err)
+	}
+	defer rows.Close()
+
+	var result []*MessageRawHTML
+	for {
+		if !rows.Next() {
+			break
+		}
+		var m MessageRawHTML
+		if err := rows.Scan(&m.ID, &m.BodyHTMLRaw); err != nil {
+			return nil, fmt.Errorf("扫描邮件行失败: %w", err)
+		}
+		result = append(result, &m)
+	}
+	return result, nil
+}
+
+// UpdateBodyHTML 更新单封邮件的 body_html（重新净化用，AC-7）。
+func (d *MessageDAO) UpdateBodyHTML(ctx context.Context, id int64, bodyHTML string) error {
+	_, err := d.db.ExecContext(ctx,
+		`UPDATE messages SET body_html = ? WHERE id = ?`, bodyHTML, id)
+	if err != nil {
+		return fmt.Errorf("更新 body_html 失败: %w", err)
+	}
+	return nil
+}
+
+// AdminMailItem 邮件列表管理（AC-9）的轻量结构。
+// 仅含列表级元数据，**不含** body_text/body_html/body_html_raw/headers_raw，
+// 管理员排查走"查看邮件头"（headers_raw 已存），正文级别介入走单独审计。
+type AdminMailItem struct {
+	ID         int64  `json:"id"`
+	UserID     int64  `json:"user_id"`
+	UserEmail  string `json:"user_email"`
+	FromAddr   string `json:"from_addr"`
+	ToAddr     string `json:"to_addr"`
+	Subject    string `json:"subject"`
+	Folder     string `json:"folder"`
+	IsRead     bool   `json:"is_read"`
+	IsStarred  bool   `json:"is_starred"`
+	IsDeleted  bool   `json:"is_deleted"`
+	HasAttach  bool   `json:"has_attach"`
+	SpamScore  int    `json:"spam_score"`
+	SizeBytes  int64  `json:"size_bytes"`
+	ReceivedAt string `json:"received_at"`
+}
+
+// AdminMailListResult 邮件列表管理响应（含分页）。
+type AdminMailListResult struct {
+	Items    []*AdminMailItem `json:"items"`
+	Total    int64            `json:"total"`
+	Page     int              `json:"page"`
+	PageSize int              `json:"page_size"`
+}
+
+// AdminMailFilter 邮件列表管理过滤条件。
+type AdminMailFilter struct {
+	UserID    int64     // 0 表示不限
+	Folder    string    // 空表示不限
+	IsRead    *bool     // nil 表示不限
+	StartTime time.Time // 零值表示不限
+	EndTime   time.Time // 零值表示不限
+}
+
+// ListAllForAdmin 管理员邮件列表查询（AC-9）。
+//
+// 设计：
+//   - 仅返回列表级元数据，不返回正文/HTML/邮件头（隐私保护）
+//   - JOIN users 表获取 user_email，便于管理员识别归属
+//   - 支持按 user_id/folder/已读状态/时间范围筛选
+//   - 排序：received_at DESC（最新在前）
+func (d *MessageDAO) ListAllForAdmin(ctx context.Context, filter AdminMailFilter, page, pageSize int) (*AdminMailListResult, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 200 {
+		pageSize = 50
+	}
+	offset := (page - 1) * pageSize
+
+	// 构造 WHERE
+	var (
+		sb    strings.Builder
+		args  []any
+		first = true
+	)
+	addCond := func(cond string, arg any) {
+		if first {
+			sb.WriteString(" WHERE ")
+			first = false
+		} else {
+			sb.WriteString(" AND ")
+		}
+		sb.WriteString(cond)
+		args = append(args, arg)
+	}
+	if filter.UserID > 0 {
+		addCond("m.user_id = ?", filter.UserID)
+	}
+	if filter.Folder != "" {
+		addCond("m.folder = ?", filter.Folder)
+	}
+	if filter.IsRead != nil {
+		v := 0
+		if *filter.IsRead {
+			v = 1
+		}
+		addCond("m.is_read = ?", v)
+	}
+	if !filter.StartTime.IsZero() {
+		addCond("m.received_at >= ?", filter.StartTime.UTC().Format("2006-01-02 15:04:05"))
+	}
+	if !filter.EndTime.IsZero() {
+		addCond("m.received_at <= ?", filter.EndTime.UTC().Format("2006-01-02 15:04:05"))
+	}
+	where := sb.String()
+
+	// 总数
+	var total int64
+	countQ := "SELECT COUNT(*) FROM messages m" + where
+	if err := d.db.QueryRowContext(ctx, countQ, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("统计邮件总数失败: %w", err)
+	}
+
+	// 列表（JOIN users 获取 email；不查 body_*/headers_raw）
+	listQ := `SELECT m.id, m.user_id, u.email, m.from_addr, m.to_addr, m.subject,
+		m.folder, m.is_read, m.is_starred, m.is_deleted, m.has_attach,
+		m.spam_score, m.size_bytes, m.received_at
+		FROM messages m LEFT JOIN users u ON m.user_id = u.id` +
+		where + " ORDER BY m.received_at DESC LIMIT ? OFFSET ?"
+	listArgs := append(args, pageSize, offset)
+	rows, err := d.db.QueryContext(ctx, listQ, listArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("查询邮件列表失败: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]*AdminMailItem, 0, pageSize)
+	for rows.Next() {
+		var (
+			item      AdminMailItem
+			isRead    int
+			isStarred int
+			isDeleted int
+			hasAttach int
+		)
+		if err := rows.Scan(&item.ID, &item.UserID, &item.UserEmail, &item.FromAddr, &item.ToAddr,
+			&item.Subject, &item.Folder, &isRead, &isStarred, &isDeleted, &hasAttach,
+			&item.SpamScore, &item.SizeBytes, &item.ReceivedAt); err != nil {
+			return nil, fmt.Errorf("扫描邮件行失败: %w", err)
+		}
+		item.IsRead = isRead == 1
+		item.IsStarred = isStarred == 1
+		item.IsDeleted = isDeleted == 1
+		item.HasAttach = hasAttach == 1
+		items = append(items, &item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("遍历邮件行失败: %w", err)
+	}
+
+	return &AdminMailListResult{
+		Items:    items,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
 }
