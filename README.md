@@ -64,29 +64,43 @@ docker compose build app && docker compose up -d
 
 <div align="center">
 
-**收件箱**
+### 邮件客户端（浅色主题）
 
-<img src="mymail-vue/public/screenshots/inbox.png" width="800" alt="收件箱" />
+| 登录页 | 收件箱 |
+|--------|--------|
+| <img src="mymail-vue/public/screenshots/login.png" width="400" alt="登录页" /> | <img src="mymail-vue/public/screenshots/inbox.png" width="400" alt="收件箱" /> |
 
-**邮件详情**
+| 邮件详情 | 写邮件 |
+|----------|--------|
+| <img src="mymail-vue/public/screenshots/mail-detail.png" width="400" alt="邮件详情" /> | <img src="mymail-vue/public/screenshots/compose.png" width="400" alt="写邮件" /> |
 
-<img src="mymail-vue/public/screenshots/mail-detail.png" width="800" alt="邮件详情" />
+### 管理后台（OA 风格子菜单）
 
-**写邮件**
+| 仪表盘 | 用户管理 |
+|--------|----------|
+| <img src="mymail-vue/public/screenshots/admin-overview.png" width="400" alt="管理后台仪表盘" /> | <img src="mymail-vue/public/screenshots/admin-users.png" width="400" alt="管理后台用户管理" /> |
 
-<img src="mymail-vue/public/screenshots/compose.png" width="800" alt="写邮件" />
+| 邮件管理 | 审计日志 |
+|----------|----------|
+| <img src="mymail-vue/public/screenshots/admin-mails.png" width="400" alt="管理后台邮件管理" /> | <img src="mymail-vue/public/screenshots/admin-audit.png" width="400" alt="管理后台审计日志" /> |
 
-**管理后台 - 仪表盘**
+| 系统配置 | 维护工具 |
+|----------|----------|
+| <img src="mymail-vue/public/screenshots/admin-config.png" width="400" alt="管理后台系统配置" /> | <img src="mymail-vue/public/screenshots/admin-maintenance.png" width="400" alt="管理后台维护工具" /> |
 
-<img src="mymail-vue/public/screenshots/admin-overview.png" width="800" alt="管理后台仪表盘" />
+### 移动端适配
 
-**管理后台 - 用户管理**
+| 移动收件箱 | 移动邮件管理 |
+|------------|--------------|
+| <img src="mymail-vue/public/screenshots/mobile-inbox.png" width="250" alt="移动端收件箱" /> | <img src="mymail-vue/public/screenshots/mobile-admin-mails.png" width="250" alt="移动端邮件管理" /> |
 
-<img src="mymail-vue/public/screenshots/admin-users.png" width="800" alt="管理后台用户管理" />
+| 客户端抽屉菜单 | 管理后台子菜单抽屉 |
+|----------------|--------------------|
+| <img src="mymail-vue/public/screenshots/mobile-app-drawer.png" width="250" alt="移动端客户端抽屉" /> | <img src="mymail-vue/public/screenshots/mobile-admin-drawer.png" width="250" alt="移动端管理后台抽屉" /> |
 
-**关于页**
+### 关于页
 
-<img src="mymail-vue/public/screenshots/about.png" width="800" alt="关于页" />
+<img src="mymail-vue/public/screenshots/about.png" width="600" alt="关于页" />
 
 </div>
 
